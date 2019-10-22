@@ -1,0 +1,38 @@
+{
+    "extends": "@chartiq/chartiq-base",
+    "rules": {
+        "strict": "error",
+        "max-len": "off",
+        "no-undef": "off",
+        "no-tabs": "off",
+        "no-debugger": "off",
+        "guard-for-in": "off",
+        "no-restricted-syntax": "off",
+        "no-use-before-define": "off",
+        "consistent-return": "off",
+        "no-unreachable": "off",
+        "func-names": "off",
+        "prefer-rest-params": "off",
+        "no-shadow": "off",
+        "no-unused-expressions": "off",
+        "no-prototype-builtins": "off",
+        "import/no-extraneous-dependencies": "off",
+        "import/order": "off",
+        "array-callback-return": "off",
+        "no-empty": "off",
+        "no-multi-assign": "off",
+        "global-require": "off",
+        "no-underscore-dangle": "off",
+        "no-useless-escape": "off",
+        "no-await-in-loop": "off",
+        "no-useless-concat": "off",
+        "default-case": "off",
+        "no-empty-function": "off",
+        "no-useless-constructor": "off",
+        "linebreak-style": "off",
+        "indent": [
+            "error",
+            "tab"
+        ]
+    }
+}

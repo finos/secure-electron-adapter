@@ -1,0 +1,26 @@
+const Joi = require('joi');
+// https://github.com/electron/windows-installer
+module.exports = Joi.object().keys({
+	appDirectory: Joi.string().required().description('The folder path of your Electron app'),
+	authors: Joi.string().required().description("The authors value for the nuget package metadata. Defaults to the author field from your app's package.json file when unspecified."),
+	outputDirectory: Joi.string().allow(null).description('The folder path to create the .exe installer in. Defaults to the installer folder at the project root'),
+	loadingGif: Joi.string().description('The local path to a .gif file to display during install.'),
+	owners: Joi.string().description('The owners value for the nuget package metadata. Defaults to the authors field when unspecified.'),
+	exe: Joi.string().description("The name of your app's main .exe file. This uses the name field in your app's package.json file with an added .exe extension when unspecified."),
+	description: Joi.string().allow(null).description("The description value for the nuget package metadata. Defaults to the description field from your app's package.json file when unspecified."),
+	version: Joi.string().allow(null).description("The version value for the nuget package metadata. Defaults to the version field from your app's package.json file when unspecified."),
+	title: Joi.string().allow(null).description("The title value for the nuget package metadata. Defaults to the productName field and then the name field from your app's package.json file when unspecified."),
+	name: Joi.string().allow(null).description("Windows Application Model ID (appId). Defaults to the name field in your app's package.json file."),
+	certificateFile: Joi.string().allow(null).description('The path to an Authenticode Code Signing Certificate'),
+	certificatePassword: Joi.string().allow(null).description('The password to decrypt the certificate given in certificateFile'),
+	signWithParams: Joi.any().allow(null).description('Params to pass to signtool. Overrides certificateFile and certificatePassword.'),
+	iconUrl: Joi.string().allow(null).description('A URL to an ICO file to use as the application icon (displayed in Control Panel > Programs and Features). Defaults to the Atom icon.'),
+	setupIcon: Joi.string().allow(null).description('The ICO file to use as the icon for the generated Setup.exe'),
+	skipUpdateIcon: Joi.boolean().description('Disables setting the icon of Update.exe. This can solve installation errors with the following message: "This application could not be started", when the setup is built on a non-Windows system.'),
+	setupExe: Joi.string().allow(null).description('The name to use for the generated Setup.exe file'),
+	setupMsi: Joi.string().allow(null).description('The name to use for the generated Setup.msi file'),
+	noMsi: Joi.boolean().description('Should Squirrel.Windows create an MSI installer?'),
+	noDelta: Joi.boolean().description('Should Squirrel.Windows delta packages? (disable only if necessary, they are a Good Thing)'),
+	remoteReleases: Joi.string().allow(null).description('A URL to your existing updates. If given, these will be downloaded to create delta updates'),
+	remoteToken: Joi.string().allow(null).description('Authentication token for remote updates'),
+});
