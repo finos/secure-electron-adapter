@@ -1,7 +1,7 @@
 {
-  "name": "@chartiq/finsemble-electron-adapter",
-  "productName": "finsemble-electron-adapter",
-  "description": "Adapter for running finsemble on electron",
+  "name": "@chartiq/secure-electron-adapter",
+  "productName": "secure-electron-adapter",
+  "description": "Adapter for running a secured workspace on electron",
   "version": "3.12.1",
   "main": "index.js",
   "scripts": {
