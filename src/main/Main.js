@@ -51,7 +51,7 @@ class Main extends EventEmitter {
 	}
 
 	/**
-	 * This will initialize the Finsemble Electron application
+	 * This will initialize the Electron application
 	 * @param {Electron App} app
 	 * @param {object} manifest Optional, for unit tests
 	 */
@@ -67,7 +67,7 @@ class Main extends EventEmitter {
 		}
 		this.manifest = manifest;
 		// Set the minimum logging level
-		const loggerConfig = this.manifest['finsemble-electron-adapter'] || { logger: {} };
+		const loggerConfig = this.manifest['secure-electron-adapter'] || { logger: {} };
 		if (loggerConfig.logger && loggerConfig.logger.logLevel) {
 			logger.setLevel(loggerConfig.logger.logLevel);
 		}
@@ -91,11 +91,11 @@ class Main extends EventEmitter {
 	 */
 	validateTrustedPreloadArray() {
 		logger.debug('Main->validateTrustedPreloadArray');
-		// @todo pull finsemble out of this.manifest.finsemble and remove the first check.
-		// this.manifest.finsemble should always exist..
-		if (this.manifest.finsemble
-			&& Array.isArray(this.manifest.finsemble.trustedPreloads)) {
-			this.manifest.finsemble.trustedPreloads.forEach((preload) => {
+		// @todo pull electronAdapter out of this.manifest.electronAdapter and remove the first check.
+		// this.manifest.electronAdapter should always exist..
+		if (this.manifest.electronAdapter
+			&& Array.isArray(this.manifest.electronAdapter.trustedPreloads)) {
+			this.manifest.electronAdapter.trustedPreloads.forEach((preload) => {
 				if (!isValidURL(preload)) {
 					// this makes it red.
 					logger.warn(getFilenameTrustedPreloadDeprecationWarning(preload));
@@ -178,7 +178,7 @@ class Main extends EventEmitter {
 			return;
 		}
 		event.preventDefault();
-		// This is a hack that doesn't break window.open but doesn't bring that window into the Finsemble fold.
+		// @todo This is a workaround that doesn't break window.open but doesn't bring that window into the fold.
 		process.applicationManager.spawnWithAffinityRequest({
 			data: {
 				affinity: frameName,
@@ -202,10 +202,10 @@ class Main extends EventEmitter {
 		const localhostRegex = /^https?:\/\/localhost:\d+/i;
 		const devtools = /^chrome-devtools.*/i;
 
-		const { feaURLWhitelist } = this.manifest.finsemble;
+		const { feaURLWhitelist } = this.manifest.electronAdapter;
 		const { url } = request;
 		let cancel = false;
-		// Ignore when its a local finsemble request
+		// Ignore when its a local electronAdapter request
 		if (devtools.test(url) || localhostRegex.test(url)) {
 			return callback({});
 		}
@@ -236,7 +236,7 @@ class Main extends EventEmitter {
 	 * Gets a manifest entry given an object chain in string form. If the object chain doesn't exist, then null will be returned.
 	 * @param {string} chain
 	 * @example
-	 * getManifestEntry("finsemble.router.blah");
+	 * getManifestEntry("electronAdapter.foo.bar");
 	 */
 	getManifestEntry(chainString) {
 		logger.verbose('main->getManifestEntry', chainString);
@@ -255,7 +255,7 @@ class Main extends EventEmitter {
 
 	/**
    * Starts Inter-Application Communication. host, port and secure are derived from the manifest entry if available.
-   * finsemble.IAC.serverAddress
+   * electronAdapter.IAC.serverAddress
    */
 	startIAC() {
 		if (this.IAC) {
@@ -264,10 +264,10 @@ class Main extends EventEmitter {
 		}
 		logger.log('APPLICATION LIFECYCLE: Starting the IAC');
 		let address = this.getManifestEntry(
-			'finsemble.router.transportSettings.FinsembleTransport.serverAddress'
+			'electronAdapter.router.transportSettings.FinsembleTransport.serverAddress'
 		);
 		if (!address) {
-			address = this.getManifestEntry('finsemble.IAC.serverAddress');
+			address = this.getManifestEntry('electronAdapter.IAC.serverAddress');
 		}
 		if (!address) {
 			address = '';
@@ -330,7 +330,7 @@ class Main extends EventEmitter {
 			this.startIAC();
 
 			// set default permissions on the PermissionsManager
-			PermissionsManager.setDefaultPermissions(manifest.finsemble.permissions);
+			PermissionsManager.setDefaultPermissions(manifest.electronAdapter.permissions);
 			ApplicationManager.setManifest(manifest);
 
 			logger.log(`APPLICATION LIFECYCLE: Starting main application ${manifest.startup_app.name}`);
