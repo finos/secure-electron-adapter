@@ -1,10 +1,10 @@
 // Electron does not yet support "import"
 const { app, session, dialog } = require('electron');
-const e2o = require('../exports');
+const e2o = require('./exports');
 const superagent = require('superagent');
 const fs = require('fs');
-const appData = require('../src/main/helpers/getAppDataFolderSync')();
-const logger = require('../src/logger/')();
+const appData = require('./src/main/helpers/getAppDataFolderSync')();
+const logger = require('./src/logger')();
 
 const MANIFEST_URL = 'http://localhost:3375/configs/openfin/manifest-local.json';
 

@@ -4,6 +4,11 @@
   "description": "Adapter for running a secured workspace on electron",
   "version": "3.12.1",
   "main": "index.js",
+  "files": [
+    "dist/",
+    "exports.js",
+    "deploy/configs"
+  ],
   "scripts": {
     "lint:quiet": "eslint --quiet ./src",
     "lint": "eslint ./src",
@@ -13,7 +18,9 @@
     "tslint:fix": "tslint -c tslint.json src/**/*.ts --fix",
     "dev": "set NODE_ENV=development&& gulp buildE2O",
     "prod": "set NODE_ENV=production&& gulp buildE2O",
-    "test": "npx electron-mocha src/**/*.spec.js --timeout 5000"
+    "test": "npx electron-mocha src/**/*.spec.js --timeout 5000",
+    "build:prod": "webpack --mode=production --config ./build/webpack.exports.js&& webpack --mode=production --config ./build/webpack.index.js&& webpack --mode=production --config ./build/webpack.renderer.js",
+    "build": "webpack --env.prod --config ./build/webpack.exports.js&& webpack --env.prod --config ./build/webpack.index.js&& webpack --env.prod --config ./build/webpack.renderer.js"
   },
   "build": {
     "appId": "e2o"
@@ -103,9 +110,10 @@
   ],
   "cmake-js": {
     "runtime": "electron",
-    "runtimeVersion": "3.0.0-beta.5"
+    "runtimeVersion": "4.1.5"
   },
   "devDependencies": {
-    "electron-ipc-mock": "0.0.3"
+    "electron-ipc-mock": "0.0.3",
+    "webpack-cli": "3.3.11"
   }
 }
