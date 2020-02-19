@@ -1,1 +1,12 @@
-!./dist
+build/
+deploy/
+docs/
+src/
+startup/
+.eslintignore
+obfuscate.json
+.eslintrc.json
+gulpfile.js
+tsconfig.json
+tslint.json
+.github
