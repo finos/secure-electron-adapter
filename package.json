@@ -3,7 +3,7 @@
   "productName": "secure-electron-adapter",
   "description": "Adapter for running a secured workspace on electron",
   "version": "3.12.1",
-  "main": "index.js",
+  "main": "./dist/index.js",
   "files": [
     "dist/",
     "exports.js",
