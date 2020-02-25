@@ -3,7 +3,7 @@
   "productName": "secure-electron-adapter",
   "description": "Adapter for running a secured workspace on electron",
   "version": "3.12.1",
-  "main": "./dist/index.js",
+  "main": "dist/devIndex.js",
   "files": [
     "dist/",
     "exports.js",
@@ -20,7 +20,8 @@
     "prod": "set NODE_ENV=production&& gulp buildE2O",
     "test": "npx electron-mocha src/**/*.spec.js --timeout 5000",
     "build:prod": "webpack --mode=production --config ./build/webpack.exports.js&& webpack --mode=production --config ./build/webpack.index.js&& webpack --mode=production --config ./build/webpack.renderer.js",
-    "build": "webpack --env.prod --config ./build/webpack.exports.js&& webpack --env.prod --config ./build/webpack.index.js&& webpack --env.prod --config ./build/webpack.renderer.js"
+    "build": "webpack --env.prod --config ./build/webpack.exports.js&& webpack --env.prod --config ./build/webpack.index.js&& webpack --env.prod --config ./build/webpack.renderer.js",
+    "start": "electron --inspect=5858 ."
   },
   "build": {
     "appId": "e2o"
@@ -114,6 +115,7 @@
   },
   "devDependencies": {
     "electron-ipc-mock": "0.0.3",
+    "express": "^4.17.1",
     "webpack-cli": "3.3.11"
   }
 }

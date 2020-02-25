@@ -1,0 +1,9 @@
+{
+    "startup_app": {
+        "name": "test",
+        "url": "http://localhost:3375/index.html"
+    },
+    "electronAdapter": {
+        "trustedPreloads": ["http://localhost:3375/preload.js"]
+    }
+}
