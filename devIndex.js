@@ -4,6 +4,7 @@ const e2o = require('./src/exports');
 const superagent = require('superagent');
 const fs = require('fs');
 const logger = require('./src/logger')();
+const path = require('path');
 
 const MANIFEST_URL = 'http://localhost:3375/manifest-local.json';
 
@@ -25,6 +26,9 @@ process.on('uncaughtException', (error) => {
 	logger.error('error', error);
 });
 
+// Before the Electron app is ready, set the directory path for storing the app's configuration files (cache, indexedDB, etc)
+const userDataPath = path.join(app.getPath('appData'), app.getName(), 'userdata');
+app.setPath('userData', userDataPath);
 
 app.on('ready', () => {
 	logger.log('APPLICATION LIFECYCLE: Electron app ready.');
