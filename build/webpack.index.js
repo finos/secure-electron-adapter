@@ -30,5 +30,5 @@ module.exports = {
 	],
 	// Those modules will not be bundled with the library, instead they will be retrieved at runtime in consumer's environment
 	// We need electron-winstaller as a bundled dependency in order to have the correct path
-	externals: ['electron-packager', 'electron-packager/hooks', 'electron-winstaller', 'bufferutil', 'utf-8-validate', 'osx-temperature-sensor', 'node-notifier', 'e2o']
+	externals: ['electron-packager', 'electron-packager/hooks', 'electron-winstaller', 'bufferutil', 'utf-8-validate', 'osx-temperature-sensor', 'node-notifier']
 };
