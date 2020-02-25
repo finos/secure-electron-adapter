@@ -87,7 +87,7 @@ module.exports = class MainWindow extends EventEmitter {
 				contextIsolation: false,
 				sandbox: true,
 				affinity: MainWindow._getAffinityForWindow(params, this.appUUID),
-				// preload: path.join(__dirname, 'e2o.js'), // Preload e2o.js. All other preloads are done in e2o.js
+				preload: path.join(__dirname, 'e2o.js'), // Preload e2o.js. All other preloads are done in e2o.js
 			},
 		});
 	}
