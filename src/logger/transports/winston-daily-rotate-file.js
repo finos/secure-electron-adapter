@@ -1,7 +1,7 @@
 const path = require('path');
 const winston = require('winston');
 const formatter = require('../formatters/basic');
-const appData = require('../../main/helpers/getAppDataFolderSync')();
+const appData = require('../../main/helpers/getAppDataFolderSync').folderPath;
 require('winston-daily-rotate-file');
 
 module.exports = new (winston.transports.DailyRotateFile)({

@@ -2,6 +2,7 @@ let deploy;
 let e2oLauncher;
 const { dialog } = require('electron');
 const logger = require('./logger')();
+const path = require('path');
 /**
 The try catches here are becuase we don't have these files when we create the installer. We need to catch the errors and fail silently.
 */
@@ -31,14 +32,14 @@ const e2oExport = {
 	// Used this to open up e2o locally without an installer
 	e2oLauncher: (params, cb = Function.prototype) => e2oLauncher(params, cb),
 	// Create a package and installer for electron applications
-	packager: deploy,
+	// packager: deploy,
 	// This is used when actually creating an e2o application. It is our main wrapper around electron
 	e2oApplication: (app, manifest) => {
 		try {
-			const e2o = require('./main/Main');
+			const e2o = require("./main/Main");
 			e2o.init(app, manifest);
 		} catch (err) {
-			logger.error(`Failed to require deploymentHelpers ${err.message}`);
+			logger.error(`${err.message}`);
 			dialog.showErrorBox('Error in e2oApplication', err.message);
 		}
 	}

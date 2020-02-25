@@ -320,7 +320,7 @@ class ApplicationManager extends EventEmitter {
 		// Get the permission set for the Application
 		params.permissions = PermissionsManager.reconcilePermissions(PermissionsManager.systemPermissions, params.permissions);
 		// Pull the trustedPreloads and domain finsemble is running in from the manifest. Both values are used to determine which preloads can be loaded
-		params.trustedPreloads = this.manifest.finsemble.trustedPreloads;
+		params.trustedPreloads = this.manifest.electronAdapter.trustedPreloads;
 
 		const startupAppUrl = this.manifest.startup_app.url;
 		try {

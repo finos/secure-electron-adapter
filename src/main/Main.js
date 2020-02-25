@@ -6,7 +6,7 @@ const path = require('path');
 const ExternalApplicationManager = require('./externalProcesses/ExternalApplicationManager');
 const ApplicationManager = require('./ApplicationManager');
 const MainBus = require('./MainBus');
-const IAC = require('../IAC/Transport');
+// const IAC = require('../IAC/Transport');
 const MainSystem = require('./MainSystem');
 const getFlag = require('../common/getFlag');
 const windowStore = require('../common/helpers/windowsStore');
@@ -14,7 +14,7 @@ const logger = require('../logger/')();
 const PermissionsManager = require('../permissions/PermissionsManager');
 const { clearPreloadCache } = require('../common/helpers');
 const CSPParser = require('../common/helpers/cspParser');
-const appData = require('./helpers/getAppDataFolderSync')();
+const appData = require('./helpers/getAppDataFolderSync').folderPath;
 
 const options = {};
 const manifest = getFlag('--manifest');
@@ -31,7 +31,7 @@ if (manifest) {
 class Main extends EventEmitter {
 	constructor() {
 		super();
-		this.IAC = null;
+		// this.IAC = null;
 		this.app = null;
 		this.assimConnection;
 		global.preload = {};
@@ -43,7 +43,7 @@ class Main extends EventEmitter {
 	 * @returns {void}
 	 */
 	bindMethods() {
-		this.startIAC = this.startIAC.bind(this);
+		// this.startIAC = this.startIAC.bind(this);
 		this.onHeadersReceived = this.onHeadersReceived.bind(this);
 		this._onWebContentsCreated = this._onWebContentsCreated.bind(this);
 		this._onNewWindowHandler = this._onNewWindowHandler.bind(this);
@@ -257,37 +257,37 @@ class Main extends EventEmitter {
    * Starts Inter-Application Communication. host, port and secure are derived from the manifest entry if available.
    * electronAdapter.IAC.serverAddress
    */
-	startIAC() {
-		if (this.IAC) {
-			logger.log('IAC already started, no need to restart');
-			return; // If IAC is already defined (like after a restart), we don't need to spin it up again.
-		}
-		logger.log('APPLICATION LIFECYCLE: Starting the IAC');
-		let address = this.getManifestEntry(
-			'electronAdapter.router.transportSettings.FinsembleTransport.serverAddress'
-		);
-		if (!address) {
-			address = this.getManifestEntry('electronAdapter.IAC.serverAddress');
-		}
-		if (!address) {
-			address = '';
-			logger.warn('Did not find serverAddress for IAC in the manifest.');
-		}
-		const arr = address.split(':');
-		const protocol = arr[0];
-		let host = arr[1];
-		const port = arr[2];
-		let options = null;
-		// take off the slashed that came from split("wss://host");
-		if (host && host.substring(0, 2) == '//') host = host.substring(2);
+	// startIAC() {
+	// 	if (this.IAC) {
+	// 		logger.log('IAC already started, no need to restart');
+	// 		return; // If IAC is already defined (like after a restart), we don't need to spin it up again.
+	// 	}
+	// 	logger.log('APPLICATION LIFECYCLE: Starting the IAC');
+	// 	let address = this.getManifestEntry(
+	// 		'electronAdapter.router.transportSettings.FinsembleTransport.serverAddress'
+	// 	);
+	// 	if (!address) {
+	// 		address = this.getManifestEntry('electronAdapter.IAC.serverAddress');
+	// 	}
+	// 	if (!address) {
+	// 		address = '';
+	// 		logger.warn('Did not find serverAddress for IAC in the manifest.');
+	// 	}
+	// 	const arr = address.split(':');
+	// 	const protocol = arr[0];
+	// 	let host = arr[1];
+	// 	const port = arr[2];
+	// 	let options = null;
+	// 	// take off the slashed that came from split("wss://host");
+	// 	if (host && host.substring(0, 2) == '//') host = host.substring(2);
 
-		// If "ws" is explicitly set then force the IAC to run insecure
-		if (protocol === 'ws') {
-			options = { secure: false };
-		}
-		this.IAC = new IAC(port, host, options);
-		this.IAC.connect();
-	}
+	// 	// If "ws" is explicitly set then force the IAC to run insecure
+	// 	if (protocol === 'ws') {
+	// 		options = { secure: false };
+	// 	}
+	// 	this.IAC = new IAC(port, host, options);
+	// 	this.IAC.connect();
+	// }
 
 	/**
 	 * Perform any work necessary to start application
@@ -327,7 +327,7 @@ class Main extends EventEmitter {
 		// @todo make async/wait. No need for this cb pyramid
 		this.app.externalApplicationManager.downloadAssets(this.getManifestEntry('appAssets'), () => {
 			logger.log('APPLICATION LIFECYCLE: Successfully downloaded assets');
-			this.startIAC();
+			// this.startIAC();
 
 			// set default permissions on the PermissionsManager
 			PermissionsManager.setDefaultPermissions(manifest.electronAdapter.permissions);

@@ -87,7 +87,7 @@ module.exports = class MainWindow extends EventEmitter {
 				contextIsolation: false,
 				sandbox: true,
 				affinity: MainWindow._getAffinityForWindow(params, this.appUUID),
-				preload: path.join(__dirname, '../../dist', 'e2o.js'), // Preload e2o.js. All other preloads are done in e2o.js
+				// preload: path.join(__dirname, 'e2o.js'), // Preload e2o.js. All other preloads are done in e2o.js
 			},
 		});
 	}
@@ -105,6 +105,7 @@ module.exports = class MainWindow extends EventEmitter {
 		});
 		await this.downloadPreloadFiles(trustedPreloads);
 		// Make sure all preloads are downloaded, then create an Electron Window
+		logger.log('async init before creating browser window');
 		await this.createBrowserWindow();
 
 		// Set disable zoom for all windows according to default window options
@@ -1015,7 +1016,7 @@ module.exports = class MainWindow extends EventEmitter {
 
 	async createBrowserWindow() {
 		logger.debug(`Creating physical browserWindow for ${this.windowName}`);
-		logger.verbose(`BrowserWindow options for ${this.windowName}, ${stringify(this.myOpts)}`);
+		logger.debug(`BrowserWindow options for ${this.windowName}, ${stringify(this.myOpts)}`);
 		this.win = new BrowserWindow(this.myOpts);
 		// This is to get around an electron bug[https://github.com/electron/electron/issues/16444] where different scaling factors of the main display will
 		// cause windows to be created at the wrong size on other monitors when we call `new BrowserWindow`
@@ -1055,6 +1056,7 @@ module.exports = class MainWindow extends EventEmitter {
 		this.setupWindowEventListeners();
 		this.customWindowEvents();
 		this.setupMainBusListeners();
+		logger.log(`window is loading this URL: ${this.url}`);
 		this.win.loadURL(this.url);
 
 		// Convert the window names to electron webContentsIds.

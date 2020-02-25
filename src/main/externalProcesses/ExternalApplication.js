@@ -1,6 +1,5 @@
 const EventEmitter = require('events').EventEmitter;
 const { spawn } = require('child_process');
-const fs = require('fs');
 const logger = require('../../logger/')();
 
 /**
