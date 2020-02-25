@@ -1,7 +1,8 @@
 {
     "startup_app": {
         "name": "test",
-        "url": "http://localhost:3375/index.html"
+        "url": "http://localhost:3375/index.html",
+        "autoShow": true
     },
     "electronAdapter": {
         "trustedPreloads": ["http://localhost:3375/preload.js"]
