@@ -4,7 +4,6 @@ const webpack = require('webpack');
 module.exports = {
 	mode: process.env.ENV || 'development',
 	entry: {
-		index: './index',
 		devIndex: './devIndex'
 	},
 	target: 'electron-main',
