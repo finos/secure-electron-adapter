@@ -1,0 +1,21 @@
+{
+    // Tell TypeScript compiler not to compile on save (since we're using webpack)
+    "compileOnSave": false,
+    "compilerOptions": {
+      "target": "ES6",
+      "moduleResolution": "node",
+      "sourceMap": true,
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true,
+      "stripInternal": true,
+      "allowJs": true,
+      "outDir": "./dist",
+      "lib": ["es2015", "dom"],
+    },
+    "include": [
+      "src/**/*"
+    ],
+    "exclude": [
+      "src/tests/**/*"
+    ]
+}
