@@ -1,4 +1,4 @@
 const path = require('path');
-const appData = require('./getAppDataFolderSync')();
+const appData = require('./getAppDataFolderSync').folderPath;
 
-module.exports = () => path.join(appData, '/e2o/cache');
+module.exports = () => path.join(appData, '/sea/cache');

@@ -1,18 +1,21 @@
-const { ipcRenderer, remote } = require('electron');
+const { ipcRenderer, dialog } = require('electron');
 const EventEmitter = require('events').EventEmitter;
 const RequestHelper = require('./RequestHelper');
-const { accessDenied, checkAndLogAccessDenied } = require('../common/helpers');
+const { checkAndLogAccessDenied } = require('./common');
 const logger = require('../logger/')();
+const MessageBus = require('./MessageBus');
 
-const currentWindow = remote.getCurrentWindow();
 
 class System extends EventEmitter {
+	
 	/**
 	 *
 	 * @param {RenderSystemParams} params
 	 */
-	constructor(params) {
+	constructor() {
 		super();
+
+		this.MessageBus = MessageBus;
 
 		// todo move aliases outside of the constructor and into the class...
 		this.addEventListener = (topic, handler) => {
@@ -21,12 +24,23 @@ class System extends EventEmitter {
 		this.removeEventListener = (topic, handler) => {
 			this.removeListener(topic, handler);
 		};
-		this.currentWindow = currentWindow;
 		ipcRenderer.on('systemEvent', this.remoteSystemEvents.bind(this));
+
+		this.bindAllFunctions();
+	}
+
+	bindAllFunctions() {
+		const self = this;
+		for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(self))) {
+			const method = self[name];
+			// skip constructor
+			if (!(method instanceof Function) || method === System) continue;
+			self[name] = self[name].bind(self);
+		}
 	}
 
 	/**
-	 * Adds listeners for OpenFin events if permitted
+	 * Adds listeners for events if permitted
 	 * @param {String} eventName
 	 * @param {Function} listener
 	 */
@@ -57,7 +71,7 @@ class System extends EventEmitter {
 	 * @return undefined
 	 */
 	exit() {
-		return RequestHelper.sendRequest({ topic: 'quit', data: null }, (eventObject, data) => {
+		return RequestHelper.sendRequest({ topic: 'exit', data: null }, (eventObject, data) => {
 			checkAndLogAccessDenied(data);
 		});
 	}
@@ -71,8 +85,8 @@ class System extends EventEmitter {
 		});
 	}
 
-	getAllApplications(cb) {
-		return RequestHelper.sendRequest({ topic: 'getAllApplications' }, (eventObject, data) => {
+	getAllWindowProcesses(cb) {
+		return RequestHelper.sendRequest({ topic: 'getAllWindowProcesses' }, (eventObject, data) => {
 			checkAndLogAccessDenied(data);
 			eventObject.cb(data);
 		}, cb);
@@ -89,11 +103,34 @@ class System extends EventEmitter {
 	}
 
 	/**
+	 * Gets the value of system environment variable(s)
+	 * @param {*} variableName either a string or an array of strings for the environment variable name(s) needed
+	 * @param {*} successCallback called when the function succeeds, regardless of whether the environment variable(s) exist.
+	 * If a string was passed, then the value of the variable name is passed to the function, or `null` if it does not exist.
+	 * If an array of strings was passed, then an object with the variable names as properties is returned.  Non-existent variables
+	 * will be `null`.
+	 * @param {*} errorCallback called when the environment variable lookup failed.
+	 */
+	getEnvironmentVariable(variableName, successCallback = Function.prototype, errorCallback = Function.prototype) {
+		return RequestHelper.sendRequest({ topic: 'getEnvironmentVariable', data: { variableName } }, (eventObject, data) => {
+			// If an error was returned by the main process, invoke the error callback.
+			// An error means that environment variables couldn't even be accessed
+			if (data.status === 'error') {
+				logger.error(`getEnvironmentVariable Error: ${data.message}`);
+				errorCallback(data);
+			} else {
+				logger.debug('getEnvironmentVariable response received.');
+				eventObject.cb(data.value);//this could be null if the env variable didn't exist -- that's allowed
+			}
+		}, successCallback);//the successCallback becomes eventObject.cb
+	}
+
+	/**
 	 *
 	 * @param {Function} cb
 	 */
-	getHostSpecs(cb) {
-		return RequestHelper.sendRequest({ topic: 'getHostSpecs' }, (eventObject, data) => {
+	getSystemInfo(cb) {
+		return RequestHelper.sendRequest({ topic: 'getSystemInfo' }, (eventObject, data) => {
 			checkAndLogAccessDenied(data);
 			eventObject.cb(data);
 		}, cb);
@@ -109,7 +146,7 @@ class System extends EventEmitter {
 			if (error) {
 				eventObject.cb(data);
 			} else {
-				eventObject.cb(data.monitorInfo);
+				eventObject.cb(data);
 				logger.verbose('getMonitorInfo request sent.');
 			}
 		}, cb);
@@ -117,14 +154,13 @@ class System extends EventEmitter {
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	getMousePosition(cb1, cb2) {
+	getMousePosition(cb) {
 		return RequestHelper.sendRequest({ topic: 'getMousePosition' }, (eventObject, data) => {
 			checkAndLogAccessDenied(data);
 			eventObject.cb(data);
-		}, cb1);
+		}, cb);
 	}
 
 	/**
@@ -142,61 +178,28 @@ class System extends EventEmitter {
 	 *
 	 * @param {Function} cb
 	 */
-	getRuntimeInfo(cb) {
-		return RequestHelper.sendRequest({ topic: 'getRuntimeInfo' }, (eventObject, data) => {
-			checkAndLogAccessDenied(data);
-			eventObject.cb(data);
-		}, cb);
-	}
-
-	/**
-	 *
-	 * @param {Function} cb
-	 */
 	getVersion(cb) {
 		return RequestHelper.sendRequest({ topic: 'getVersion' }, (eventObject, data) => {
 			checkAndLogAccessDenied(data);
-			eventObject.cb(data);
+			eventObject.cb(process.versions);
 		}, cb);
 	}
 
-	/**
-	 *
-	 * @param {@object} params object
-	 * @param {string} params.arguments additional arguments to be passed to the asset.
-	 * @param {string} params.alias "Alias" of the asset. Refers to an alias inside of the "appAssets" part of the application's manifest
-	 * @param {*} cb1 Callback to be invoked upon method success
-	 * @param {*} cb2 Callback to be invoked upon method failure
- 	 */
-	launchExternalProcess(params, cb1, cb2) {
-		return RequestHelper.sendRequest({ topic: 'launchExternalProcess', data: { id: currentWindow.id, data: params } }, (eventObject, data) => {
-			// If an error was returned by the main process, invoke the error callback.
-			if (data.status === 'error') {
-				logger.error(`launchExternalProcess: ${data.message}`);
-				if (cb2) {
-					return cb2({
-						status: 'error',
-						message: data.message,
-						code: 'launch_fail',
-					});
-				}
-			} else {
-				logger.debug('launchExternalProcess request sent.');
-				eventObject.cb(data);
-			}
-		}, cb1);
+	sendNotification(params) {
+		RequestHelper.sendRequest({ topic: 'notification', data: params }, (event, response) => {
+			checkAndLogAccessDenied(response);
+		});
 	}
 
 	/**
+	 * Should be called once from startup application specified in manifest.main.url to confirm it has started
 	 *
-	 * @param {String} url
-	 * @param {Function} cb
 	 */
-	openUrlWithBrowser(url, cb) {
-		return RequestHelper.sendRequest({ topic: 'openUrlWithBrowser', data: url }, (eventObject, data) => {
+	startupApplicationHandshake() {
+		return RequestHelper.sendRequest({ topic: 'startupApplicationHandshake' }, (eventObject, data) => {
 			checkAndLogAccessDenied(data);
 			eventObject.cb(data);
-		}, cb);
+		}, Function.prototype);
 	}
 
 	/**
@@ -227,140 +230,6 @@ class System extends EventEmitter {
 			checkAndLogAccessDenied(data);
 			cb();
 		});
-	}
-
-	setMinLogLevel() {
-		logger.error('Unimplemented method: System.setMinLogLevel');
-	}
-
-	// unimplemented
-	startCrashReporter() {
-		logger.error('Unimplemented method: System.startCrashReporter');
-	}
-
-	// unimplemented
-	getAppAssetInfo() {
-		logger.error('Unimplemented method: System.getAppAssetInfo');
-	}
-
-	// unimplemented
-	deleteCache() {
-		logger.error('Unimplemented method: System.deleteCache');
-	}
-
-	// unimplemented
-	downloadAsset() {
-		logger.error('Unimplemented method: System.downloadAsset');
-	}
-
-	// unimplemented
-	downloadPreloadScripts() {
-		logger.error('Unimplemented method: System.downloadPreloadScripts');
-	}
-
-	// Not implemented purposefully
-	downloadRuntime() {
-		logger.error('Unimplemented method: System.downloadRuntime');
-	}
-
-	// Not implemented purposefully
-	flushCookie() {
-		logger.error('Unimplemented method: System.flushCookie');
-	}
-
-	// unimplemented
-	getAllExternalApplication() {
-		logger.error('Unimplemented method: System.getAllExternalApplication');
-	}
-
-	// unimplemented
-	getCommandLineArguments() {
-		logger.error('Unimplemented method: System.getCommandLineArguments');
-	}
-
-	// unimplemented
-	getCookies() {
-		logger.error('Unimplemented method: System.getCookies');
-	}
-
-	// unimplemented
-	getCrashReporterState() {
-		logger.error('Unimplemented method: System.getCrashReporterState');
-	}
-
-	// unimplemented
-	getDeviceUserId() {
-		logger.error('Unimplemented method: System.getDeviceUserId');
-	}
-
-	// unimplemented
-	getEntityInfo() {
-		logger.error('Unimplemented method: System.getEntityInfo');
-	}
-
-	// unimplemented
-	getEnvironmentVariable() {
-		logger.error('Unimplemented method: System.getEnvironmentVariable');
-	}
-
-	// unimplemented
-	getFocusedWindow() {
-		logger.error('Unimplemented method: System.getFocusedWindow');
-	}
-
-	// unimplemented
-	getLogList() {
-		logger.error('Unimplemented method: System.getLogList');
-	}
-
-	// unimplemented
-	getMachineId() {
-		logger.error('Unimplemented method: System.getMachineId');
-	}
-
-	// unimplemented
-	getMinLogLevel() {
-		logger.error('Unimplemented method: System.getMinLogLevel');
-	}
-
-	// unimplemented
-	getProxySettings() {
-		logger.error('Unimplemented method: System.getProxySettings');
-	}
-
-	// unimplemented
-	log() {
-		logger.error('Unimplemented method: System.log');
-	}
-
-	// unimplemented
-	monitorExternalProcess() {
-		logger.error('Unimplemented method: System.monitorExternalProcess');
-	}
-
-	// unimplemented
-	readRegistryValue() {
-		logger.error('Unimplemented method: System.readRegistryValue');
-	}
-
-	// unimplemented
-	registerExternalConnection() {
-		logger.error('Unimplemented method: System.registerExternalConnection');
-	}
-
-	// unimplemented
-	releaseExternalProcess() {
-		logger.error('Unimplemented method: System.releaseExternalProcess');
-	}
-
-	// unimplemented
-	terminateExternalProcess() {
-		logger.error('Unimplemented method: System.terminateExternalProcess');
-	}
-
-	// unimplemented
-	updateProxySettings() {
-		logger.error('Unimplemented method: System.updateProxySettings');
 	}
 }
 

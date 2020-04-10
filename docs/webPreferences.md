@@ -1,6 +1,6 @@
-# Overview of e2o webPreferences
+# Overview of sea webPreferences
 
-### Provide secure settings for all windows created using e2o api
+### Provide secure settings for all windows created using sea api
 
 ##### a. disable node integration for all windows
 
@@ -14,7 +14,7 @@ To learn more about the sandbox, view https://electronjs.org/docs/api/sandbox-op
 
 ##### c. enableRemoteModule is set to false
 
-Prevents the `remote` module from being used in renderer processes. This prevents any symbols from being loaded into the renderer process that live in the main process. Note: This does not prevent the remote module from being used in preloads. For example. `fin.Window.getCurrent()` will still work.
+Prevents the `remote` module from being used in renderer processes. This prevents any symbols from being loaded into the renderer process that live in the main process. Note: This does not prevent the remote module from being used in preloads. For example. `sea.getCurrentWindow()` will still work.
 
 ##### d. webSecurity is set to true
 

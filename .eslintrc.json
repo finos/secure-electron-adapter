@@ -1,7 +1,13 @@
 {
-    "extends": "@chartiq/chartiq-base",
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 2018
+    },
+    "env": {
+        "es6": true
+    },
     "rules": {
-        "strict": "error",
+        "strict": "off",
         "max-len": "off",
         "no-undef": "off",
         "no-tabs": "off",
@@ -14,6 +20,8 @@
         "func-names": "off",
         "prefer-rest-params": "off",
         "no-shadow": "off",
+        "no-console": "off",
+        "no-unused-vars": "off",
         "no-unused-expressions": "off",
         "no-prototype-builtins": "off",
         "import/no-extraneous-dependencies": "off",

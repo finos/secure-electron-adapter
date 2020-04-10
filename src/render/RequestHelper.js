@@ -17,11 +17,11 @@ class RequestHelper extends EventEmitter {
 		ipcRenderer.on('systemResponse', this.systemResponse.bind(this));
 	}
 
-	asyncSendRequest(e2oRequest) {
+	asyncSendRequest(seaRequest) {
 		return new Promise((resolve, reject) => {
 			const responseUUID = uuidV4();
 			ipcRenderer.on(responseUUID, (event, data) => resolve(data));
-			ipcRenderer.send('e2o.mainRequest', e2oRequest, responseUUID);
+			ipcRenderer.send('sea.mainRequest', seaRequest, responseUUID);
 		});
 	}
 
@@ -35,7 +35,7 @@ class RequestHelper extends EventEmitter {
 	 * @param {RequestHelperRequest} params
 	 * @param {Function} [functionCB] Method to be invoked after the main
 	 * process responds to the message.
-	 * @param {Funtion} [cb] Method to be invoked to return result back to e2o user
+	 * @param {Funtion} [cb] Method to be invoked to return result back to sea user
 	 * @return undefined
 	 */
 	sendRequest(params, functionCB = Function.prototype, cb = Function.prototype) {
@@ -85,7 +85,7 @@ class RequestHelper extends EventEmitter {
 				data
 			};
 
-			ipcRenderer.send('e2o.mainRequest', SendObect, reUUID);
+			ipcRenderer.send('sea.mainRequest', SendObect, reUUID);
 		}
 
 		sendRequestOut(eventObject);

@@ -26,11 +26,12 @@ const {
 } = require('../common/helpers');
 const stringify = require('../common/helpers/safeStringify');
 
+
+
 global.windows = {};
 global.preloadsLoaded = {};
 global.preload = {};
 
-const allWindows = {};
 let movingWindow;
 let resizingWindow;
 let resizeEdges = [];
@@ -41,7 +42,7 @@ const WINAPI = { // https://wiki.winehq.org/List_Of_Windows_Messages
 };
 module.exports = class MainWindow extends EventEmitter {
 	/**
-	 * create a new wrap creates a window.
+	 * creates a window or reference to an existing window
 	 * @param {MainWindowParams} params
 	 * @param {Function} cb
 	 */
@@ -56,15 +57,16 @@ module.exports = class MainWindow extends EventEmitter {
 		this.bindFunctions();
 		this.movable = true;
 		this.isMoving = false;
-		this.closeRequested = false; // Toggles to true when Finsemble has registered a "close-requested" event. When this is true, automatic window closes are disabled.
+		this.closeRequested = false; // Toggles to true when the application has registered a "close-requested" event. When this is true, automatic window closes are disabled.
 		params.backgroundColor = undefined;
 		this.url = params.url;
+		this.lastMove = Date.now(); // Timestamp for last time a window was moved. Used to suppress extra move event when the OS moves a window.
 		this.customData = params.customData || {};
 		if (params.mainWindowOptions && params.mainWindowOptions.customData) {
 			this.customData = params.mainWindowOptions.customData;
 		}
 		this.permissions = params.permissions;
-		this.finsembleDomain = params.finsembleDomain;
+		this.trustedDomain = params.trustedDomain;
 		this.trustedPreloads = params.trustedPreloads || [];
 		this.originalParams = params;
 		// This stores the information used to create the window
@@ -75,19 +77,21 @@ module.exports = class MainWindow extends EventEmitter {
 			x: params.defaultLeft || 0,
 			y: params.defaultTop || 0,
 			url: params.url,
-			show: params.autoShow || false,
+			show: params.visible || false,
 			icon: params.icon,
 			title: params.name,
 			frame: params.frame,
 			skipTaskbar: params.showTaskbarIcon === false,
 			autoHideMenuBar: true,
+			acceptFirstMouse: true,
 			webPreferences: {
 				webSecurity: true,
 				nodeIntegration: false,
-				contextIsolation: false,
+				contextIsolation: true,
+				enableRemoteModule: false,
 				sandbox: true,
 				affinity: MainWindow._getAffinityForWindow(params, this.appUUID),
-				preload: path.join(__dirname, '../../dist', 'e2o.js'), // Preload e2o.js. All other preloads are done in e2o.js
+				preload: path.join(__dirname, 'sea.js'), // Preload sea.js. All other preloads are done in sea.js
 			},
 		});
 	}
@@ -101,7 +105,7 @@ module.exports = class MainWindow extends EventEmitter {
 		const trustedPreloads = this.handleTrustedPreloads({
 			fileList: this.originalParams.preload,
 			preloadsAllowed,
-			finsembleDomain: this.finsembleDomain
+			trustedDomain: this.trustedDomain
 		});
 		await this.downloadPreloadFiles(trustedPreloads);
 		// Make sure all preloads are downloaded, then create an Electron Window
@@ -111,9 +115,8 @@ module.exports = class MainWindow extends EventEmitter {
 		if (defaultWindowOptions.webPreferences.disableZoom) {
 			const { webContents } = this.win;
 			webContents.on('did-finish-load', () => {
-				webContents.setZoomFactor(1);
+				webContents.zoomFactor = 1;
 				webContents.setVisualZoomLevelLimits(1, 1);
-				webContents.setLayoutZoomLevelLimits(0, 0);
 			});
 		}
 	}
@@ -125,12 +128,9 @@ module.exports = class MainWindow extends EventEmitter {
 		this.sendEventToWindows = this.sendEventToWindows.bind(this);
 		this.createBrowserWindow = this.createBrowserWindow.bind(this);
 		this.sendEventToApplication = this.sendEventToApplication.bind(this);
-		this.mouseUp = this.mouseUp.bind(this);
-		this.mouseDown = this.mouseDown.bind(this);
-		this.moveEvent = this.moveEvent.bind(this);
-		this.resizeEvent = this.resizeEvent.bind(this);
 		this.convertBoundsInfo = this.convertBoundsInfo.bind(this);
 		this.getBounds = this.getBounds.bind(this);
+		this.getBoundsFromSystem = this.getBoundsFromSystem.bind(this);
 		this.setBounds = this.setBounds.bind(this);
 		this.updateOptions = this.updateOptions.bind(this);
 		this.getDetails = this.getDetails.bind(this);
@@ -143,8 +143,6 @@ module.exports = class MainWindow extends EventEmitter {
 		this.bringToFront = this.bringToFront.bind(this);
 		this.restore = this.restore.bind(this);
 		this.isShowing = this.isShowing.bind(this);
-		this.disableFrame = this.disableFrame.bind(this);
-		this.enableFrame = this.enableFrame.bind(this);
 		this.executeJavaScript = this.executeJavaScript.bind(this);
 		this.showDeveloperTools = this.showDeveloperTools.bind(this);
 		this.focus = this.focus.bind(this);
@@ -157,8 +155,8 @@ module.exports = class MainWindow extends EventEmitter {
 	}
 
 	/**
-	 * Converts electron bounds into bounds that finsemble can use. The key difference is that
-	 * electron uses x/y, and finsemble uses left/top.
+	 * Converts electron bounds into bounds that the windowProcess can use. The key difference is that
+	 * electron uses x/y, and the windowProcess uses left/top.
 	 * @param {WindowBounds} bounds
 	 */
 	convertBoundsInfo(bounds) {
@@ -180,10 +178,10 @@ module.exports = class MainWindow extends EventEmitter {
 				if (this[name]) {
 					let topic = `${this.windowName}-${name}`;
 
-					// When a window is of type "application", some events will be handled on both the Window and the Application.
-					// For now, we only handle this discrepency on the close event because it causes an error.
+					// When a window is of type "application", some events will be handled on both the Window and the WindowProcess.
+					// For now, we only handle this discrepancy on the close event because it causes an error.
 					// The error happens because we try to check permissions on the window, but it's already been closed by the application shutting down.
-					// The code below just adds a prefix so that the application and window receive seperate events.
+					// The code below just adds a prefix so that the application and window receive separate events.
 					// Long-term this fix will apply to all application and window events
 					if (name === 'close') {
 						topic = `Window-${topic}`;
@@ -218,26 +216,9 @@ module.exports = class MainWindow extends EventEmitter {
 	}
 
 	/**
-	 * any window event listeners that don't follow the base case handled in `setupWindowEventListeners`
+	 * Any window event listeners that don't follow the base case handled in `setupWindowEventListeners`
 	 */
 	customWindowEvents() {
-		// @todo this drives me bananas. LOOK AT ALL OF THESE ANONYMOUS EVENT HANDLERS.
-		if (this.win.hookWindowMessage) {
-			// When the window's ENTERSIZEMOVE event is thrown, we will call 'mouseDown'.
-			this.win.hookWindowMessage(WINAPI.WM_ENTERSIZEMOVE, this.mouseDown);
-			// When the window's EXITSIZEMOVE event is thrown, we will call 'mouseUp'.
-			this.win.hookWindowMessage(WINAPI.WM_EXITSIZEMOVE, this.mouseUp);
-		} else {
-			console.error('BrowserWindow.hookWindowMessage is undefined.  Finsemble is running in an experimental state that will not be fully functional.');
-		}
-
-		// This event is thrown before electron proceeds with a resize or move event.
-		// This allows us to intercept the move request and choose to move the window somewhere else.
-		this.win.on('will-resize', (event, newBounds) => { this.resizeEvent(event, newBounds); });
-		this.win.on('will-move', (event, newBounds) => { this.moveEvent(event, newBounds); });
-
-		// this.win.on("resize", (event) => { this.sendEventToWindows("disabled-frame-bounds-changed"); });
-
 		// When the close event (which is essentially a request) fires, prevent the event if someone is
 		// listening on close - requested.Otherwise nothing happens.
 		this.win.on('close', (event) => {
@@ -252,18 +233,20 @@ module.exports = class MainWindow extends EventEmitter {
 		// When the window has finally closed, remove all of the listeners we created
 		// and let the rest of the system know that we've gone down.
 		this.win.on('closed', (event) => {
-			// Get rid of all subscribers so if a window with the same name is reincarnated, FEA won't blow up.
-			MainBus.unsubscribeWindow(this.windowName)
+			// Get rid of all subscribers so if a window with the same name is reincarnated, SEA won't blow up.
+			MainBus.unsubscribeWindow(this.windowName);
 			this.removeAPIHandlers();
 			windowStore.delete(this.windowName);
-			// This is a poorly chosen event name. At this point, MainApplication will handle its cleanup of this window.
 			this.emit('close', this.windowName);
+
 			this.sendEventToWindows('closed', { name: this.windowName });
+			// Since win.close() was successful, we don't need to destroy the window
+			clearTimeout(this.destoryWindowTimer);
 		});
 	}
 
 	/**
-	 * Changes the 'closeRequested' boolean. This is a vlaue that changes the way the window closes.
+	 * Changes the 'closeRequested' boolean. This is a value that changes the way the window closes.
 	 * If it is true, the window will wait for the program to do some work before closing the window.
 	 * If it is false, nothing changes.
 	 */
@@ -281,7 +264,7 @@ module.exports = class MainWindow extends EventEmitter {
 	 * @param {Object} data
 	 */
 	sendEventToApplication(event, data) {
-		MainBus.sendEvent(`applicationEvent-${this.appUUID}.${event}`, data);
+		MainBus.sendEvent(`windowProcessEvent-${this.appUUID}.${event}`, data);
 	}
 
 	/**
@@ -294,229 +277,7 @@ module.exports = class MainWindow extends EventEmitter {
 	}
 
 	/**
-	 * disabled-frame-bounds-changing requires a different format for bounds info
-	 */
-	getBoundsEventInfo() {
-		if (!this.location) return;
-		const mouseLocation = electron.screen.getCursorScreenPoint();
-
-		// Here we are using the mouse location + an offset because the bounds emitted by the will-move event
-		// are wrong and cause the window to violently jerk in the general direction of the user's
-		// mouse movment. This custom left/top enables smooth movement.
-		const left = Number(mouseLocation.x) - Number(this.movingObj.mouseOffset.left);
-		const top = Number(mouseLocation.y) - Number(this.movingObj.mouseOffset.top);
-		const height = Number(this.location.height);
-		const width = Number(this.location.width);
-		const newLocation = {
-			left,
-			top,
-			width,
-			height,
-			right: left + width,
-			bottom: top + height,
-		};
-
-		newLocation.changeType = 0;
-		newLocation.name = this.windowName;
-		return newLocation;
-	}
-
-	/**
-	 * Handle resize events
-	 * @param {WindowEvent} event
-	 * @param {WindowBounds} newBounds
-	 */
-	resizeEvent(event, newBounds) {
-		// some other window is being resized. This one is likely being resized because it is docked.
-		if (this.movable || (resizingWindow && resizingWindow != this.windowName)) {
-			return;
-		}
-		event.preventDefault();
-
-		// new bounds come unscaled. scale them:
-		let point = { x: newBounds.x, y: newBounds.y };
-		let scaledPoint = electron.screen.screenToDipPoint(point);
-
-		point = { x: newBounds.x + newBounds.width, y: newBounds.y + newBounds.height };
-		newBounds.x = Math.round(scaledPoint.x);
-		newBounds.y = Math.round(scaledPoint.y);
-
-		scaledPoint = electron.screen.screenToDipPoint(point);
-		newBounds.right = Math.round(scaledPoint.x);
-		newBounds.bottom = Math.round(scaledPoint.y);
-
-		newBounds.width = newBounds.right - newBounds.x;
-		newBounds.height = newBounds.bottom - newBounds.y;
-
-		const currentWindowLocation = this.convertBoundsInfo(this.win.getBounds());
-
-		// try to ascertain which edge(s) we are resizing from
-		// these moves are really small so sometimes a corner move only shows a change on one side. Keep checking during move so that change isn't missed.
-		if (Math.abs(currentWindowLocation.x - newBounds.x) >= 1 && !resizeEdges.includes('left')) {
-			resizeEdges.push('left');
-		}
-		if (Math.abs(currentWindowLocation.y - newBounds.y) >= 1 && !resizeEdges.includes('top')) {
-			resizeEdges.push('top');
-		}
-		if (Math.abs(currentWindowLocation.right - newBounds.right) >= 1 && !resizeEdges.includes('right')) {
-			resizeEdges.push('right');
-		}
-		if (Math.abs(currentWindowLocation.bottom - newBounds.bottom) >= 1 && !resizeEdges.includes('bottom')) {
-			resizeEdges.push('bottom');
-		}
-		// If we aren't actually resizing the window, we've gotten into this event errantly. Instead of
-		// sending out bad bounds-changing events, end here.
-		if (!resizeEdges.length) return;
-		// @todo staticEdges is a global object for some reason. It is only used in this function.
-		// good candidate for refactoring.
-		staticEdges = currentWindowLocation;
-		resizingWindow = this.windowName;
-		if (this.lastResizeTime && (Date.now() - this.lastResizeTime < 10)) {
-			// @todo can lodash.throttle be used here?
-			// throttle
-			// Prevents a ton of resize requests from pummeling the system.
-			return;
-		}
-
-		this.lastResizeTime = Date.now();
-
-		// Used on mouseUp to determine what information to send out.
-		if (!this.isResizing) {
-			this.isResizing = true;
-		}
-
-		// deal with rounding
-		// This seems to be necessary to keep components from overlapping on snap.
-		if (!resizeEdges.includes('left')) {
-			newBounds.x = staticEdges.x;
-		}
-		if (!resizeEdges.includes('top')) {
-			newBounds.y = staticEdges.y;
-		}
-		if (!resizeEdges.includes('right')) {
-			newBounds.right = staticEdges.right;
-		}
-		if (!resizeEdges.includes('bottom')) {
-			newBounds.bottom = staticEdges.bottom;
-		}
-
-		newBounds.height = newBounds.bottom - newBounds.y;
-		newBounds.width = newBounds.right - newBounds.x;
-
-		this.lastSizeMoveLoc = {
-			left: newBounds.x,
-			top: newBounds.y,
-			height: newBounds.height,
-			width: newBounds.width,
-			changeType: 1,
-		};
-
-		// This event will bubble up inside of the DockableWindow in finsemble. There, we will determine
-		// whether the user's intended move will be allowed to proceed, or if we should modify it
-		// (e.g., snap it to another window or monitor).
-		this.sendEventToWindows('disabled-frame-bounds-changing', this.lastSizeMoveLoc);
-	}
-
-	/**
-	 * handle move events
-	 * @param {} event
-	 */
-	moveEvent(event, newBounds) {
-		if (this.movable || (movingWindow && movingWindow != this.windowName)) {
-			// some other window is the primary mover. This one is likely being dragged around because it is docked.
-			// console.log("some other window is being moved: ", movingWindow);
-			return;
-		}
-
-		event.preventDefault();
-
-		const now = Date.now();
-		if (!movingWindow) {
-			movingWindow = this.windowName;
-		} else if (this.lastResizeTime && (now - this.lastResizeTime < 10)) { // throttle
-			logger.verbose(`Throttled move: Now: ${now}, lastResizeTime: ${lastResizeTime}`);
-			return;
-		}
-
-		if (!this.isMoving) {
-			this.isMoving = true;
-		}
-
-		const mouseLocation = electron.screen.getCursorScreenPoint();
-		// let currentWindowLocation = this.convertBoundsInfo(this.win.getBounds());
-
-		// Here we are using the mouse location + an offset because the bounds emitted by the will-move event
-		// are wrong and cause the window to violently jerk in the general direction of the user's
-		// mouse movment. This custom left/top enables smooth movement.
-		newBounds.x = Math.round(this.startMoveWindowLocation.x + mouseLocation.x - this.startMoveMouseLocation.x);
-		newBounds.y = Math.round(this.startMoveWindowLocation.y + mouseLocation.y - this.startMoveMouseLocation.y);
-
-
-		newBounds.width = this.startMoveWindowLocation.width;
-		newBounds.height = this.startMoveWindowLocation.height;
-
-		this.lastSizeMoveLoc = {
-			left: newBounds.x,
-			top: newBounds.y,
-			height: newBounds.height,
-			width: newBounds.width,
-			changeType: 0,
-		};
-
-		// win7: fast mouse movement after mouse down sometimes has the mouse position
-		// outside of the window bounds. Return to prevent cursor moving outside of window.
-		if (mouseLocation.y < newBounds.y
-			|| mouseLocation.y > newBounds.y + newBounds.height
-			|| mouseLocation.x < newBounds.x
-			|| mouseLocation.x > newBounds.x + newBounds.width
-		) {
-			return;
-		}
-
-		// uncomment the lines below for debugging.
-		// console.log(this.startMoveWindowLocation, this.lastSizeMoveLoc);
-		// console.log(this.lastSizeMoveLoc);
-
-		// This event will bubble up inside of the DockableWindow in finsemble. There, we will determine
-		// whether the user's intended move will be allowed to proceed, or if we should modify it
-		// (e.g., snap it to another window or monitor).
-		this.sendEventToWindows('disabled-frame-bounds-changing', this.lastSizeMoveLoc);
-	}
-
-	/**
-	 * Track when the mouse is down so we know if the user initiated the move/resize event
-	 * @param {WindowEvent} event
-	 */
-	mouseDown(event) {
-		this.startMoveMouseLocation = electron.screen.getCursorScreenPoint();
-		this.startMoveWindowLocation = this.convertBoundsInfo(this.win.getBounds());
-	}
-
-	/**
-	 * Handle the mouse up event. If we're moving/resizing send out events and reset the window
-	 * @param {WindowEvent} event
-	 */
-	mouseUp(event) {
-		if (this.isMoving) {
-			this.isMoving = false;
-			// prevent jitter from bounds sent by docking not matching last bounds
-			this.win.setBounds(this.location);
-			this.sendEventToWindows('disabled-frame-bounds-changed', this.getBounds());
-			movingWindow = null;
-		}
-
-		if (this.isResizing) {
-			this.isResizing = false;
-			// prevent jitter from bounds sent by docking not matching last bounds
-			this.win.setBounds(this.location);
-			this.sendEventToWindows('disabled-frame-bounds-changed', this.getBounds());
-			resizingWindow = null;
-			resizeEdges = [];
-		}
-	}
-
-	/**
-	 * Update the window options. Right now, actions only occur on three options
+	 * Update the window options. Right now, actions only occur on four options
 	 * @param {BusEvent} eventObj
 	 */
 	updateOptions(eventObj) {
@@ -528,15 +289,18 @@ module.exports = class MainWindow extends EventEmitter {
 		}
 		for (const o in options) {
 			switch (o) {
-				case 'opacity':
-					this.win.setOpacity(options[o]);
-					break;
-				case 'alwaysOnTop':
-					this.win.setAlwaysOnTop(options[o]);
-					break;
-				case 'showTaskbarIcon':
-					this.win.setSkipTaskbar(!options[o]);
-					break;
+			case 'opacity':
+				this.win.setOpacity(options[o]);
+				break;
+			case 'alwaysOnTop':
+				this.win.setAlwaysOnTop(options[o]);
+				break;
+			case 'showTaskbarIcon':
+				this.win.setSkipTaskbar(!options[o]);
+				break;
+			case 'resizable':
+				this.win.setResizable(options[o]);
+				break;
 			}
 		}
 		this.details = Object.assign(this.details, options);
@@ -589,42 +353,27 @@ module.exports = class MainWindow extends EventEmitter {
 	 */
 	setBounds(eventObj) {
 		const params = eventObj.data.bounds;
-		if (!params) {
-			logger.warn(`setBounds called with no bounds for window ${this.windowName}`);
-			return;
-		}
-		const xMissing = !params.hasOwnProperty('x');
-		const yMissing = !params.hasOwnProperty('y');
-		const heightMissing = !params.hasOwnProperty('height');
-		const widthMissing = !params.hasOwnProperty('width');
-
-		if (xMissing || yMissing || widthMissing || heightMissing) {
-			let errorMessage = 'The following properties are missing from setBounds: ';
-			if (xMissing) errorMessage += 'x, ';
-			if (yMissing) errorMessage += 'y, ';
-			if (widthMissing) errorMessage += 'width, ';
-			if (heightMissing) errorMessage += 'height';
-			errorMessage += '.';
-			logger.error(`${errorMessage} ${params} `);
-			return;
-		}
-
-		// round everything -> assimilated windows are sending fractional bounds
-		for (const i in params) {
-			params[i] = Math.round(params[i]);
-		}
-
-		/**
-		 * Hack. For some reason this must be called twice to work.
-		 * @todo verify that this is still true. I do not think this is the case.
-		 */
 		this.win.setBounds(params);
-		this.win.setBounds(params); // need to do this twice
-		this.location = params;
-		this.win.setSize(params.width, params.height);
+	}
 
-		eventObj.respond(this.getBounds());
-		return this.getBounds();
+	/**
+	 * Gets the window bounds from the system. Used to determine where the system moved the window after a monitor change
+	 * @param {*} eventObj
+	 * TODO: getBounds returns the last location as SEA knows it instead of asking the system. Test if using the last location is really necessary to see if this function can be merged with getBounds.
+	 */
+	getBoundsFromSystem(eventObj) {
+		const bounds = this.win.getBounds() || this.lastSizeMoveLoc;
+		const convertedBounds = {
+			left: bounds.x,
+			top: bounds.y,
+			height: bounds.height,
+			width: bounds.width,
+			bottom: bounds.y + bounds.height,
+			right: bounds.x + bounds.width
+		};
+
+		if (eventObj) eventObj.respond(convertedBounds);
+		return convertedBounds;
 	}
 
 	/**
@@ -715,14 +464,10 @@ module.exports = class MainWindow extends EventEmitter {
 		let response = null;
 		logger.log(`WINDOW LIFECYCLE: Closing window ${this.windowName}.`);
 		if (!this.win) logger.error('WINDOW LIFECYCLE: Attempting to close a window that\'s not defined.');
+		this.emit('close', this.windowName);
 		try {
-			if (!this.win.isDestroyed()) {
-				if (allWindows[this.win.id]) {
-					delete allWindows[this.win.id];
-				}
-
-				this.win.destroy();
-			}
+			this.win.close();
+			this.destoryWindowTimer = this.destoryWindow();
 			response = { status: 'success' };
 		} catch (e) {
 			logger.warn(`WINDOW LIFECYCLE: Could not close window ${this.windowName}.`);
@@ -732,6 +477,24 @@ module.exports = class MainWindow extends EventEmitter {
 			return eventObj.respond(response);
 		}
 		return null;
+	}
+
+	/**
+	 * Destroys the window after a specified duration
+	 * @param {number} duration The duration in milliseconds
+	 * @private
+	 */
+	destoryWindow(duration = 500) {
+		return setTimeout(() => {
+			if (this.win && !this.win.isDestroyed()) {
+				try {
+					logger.info(`Destroying window ${this.windowName}`);
+					this.win.destroy();
+				} catch (err) {
+					logger.warn(`Failed to destroy window ${this.windowName}, ${err.message}`);
+				}
+			}
+		}, duration);
 	}
 
 	/**
@@ -771,30 +534,6 @@ module.exports = class MainWindow extends EventEmitter {
 	}
 
 	/**
-	 * Disable a windows frame. This makes it so a user cannot move the window. Movement must occur from setbounds while this is active. While disabled, window will emit `disabled-frame-bounds-changing` events.
-	 * @param {BusEvent} eventObj
-	 */
-	disableFrame(eventObj) {
-		logger.debug(`WINDOW LIFECYCLE: Disabling the frame for ${this.windowName}.`);
-		this.movable = false;
-		if (!this.win) {
-			logger.warn(`DisableFrame failed because window is not defined: ${this.windowName} `);
-			return;
-		}
-		eventObj.respond({ status: 'success' });
-	}
-
-	/**
-	 * Sets the window back to user moveable
-	 * @param {BusEvent} eventObj
-	 */
-	enableFrame(eventObj) {
-		logger.debug(`WINDOW LIFECYCLE: Enabling the frame for ${this.windowName}.`);
-		this.movable = true;
-		eventObj.respond({ status: 'success' });
-	}
-
-	/**
 	 * Execute javascript in the window. We only allow the creator of the window to call this method.
 	 * @param {BusEvent} eventObj
 	 */
@@ -805,11 +544,9 @@ module.exports = class MainWindow extends EventEmitter {
 		const { execJSWhitelist } = this.myOpts;
 		const whiteListIds = await this._getIdsFromWindowNames(execJSWhitelist);
 		if (whiteListIds.includes(eventObj.sender.webContents.id)) {
-			this.win.webContents
-				.executeJavaScript(eventObj.data.script, true, () => {
-					logger.debug(`Execute javascrpt successful for window ${this.windowName}.`);
-					eventObj.respond({ status: 'success' });
-				});
+			const result = await this.win.webContents.executeJavaScript(eventObj.data.script, true);
+			logger.debug(`executeJavaScript for window ${this.windowName} returned `, result);
+			eventObj.respond({ status: 'success' });
 		} else {
 			const err = {
 				status: 'error',
@@ -817,7 +554,7 @@ module.exports = class MainWindow extends EventEmitter {
 				message: `executeJavaScript is only allowed if invoked upon child windows. Window ${senderOpts.name} did not create ${this.windowName}.`
 			};
 			eventObj.respond(err);
-			logger.warn(`Execute javascrpt failed for window ${this.windowName}: {err.message}`);
+			logger.warn(`executeJavaScript failed for window ${this.windowName}: {err.message}`);
 		}
 	}
 
@@ -843,7 +580,7 @@ module.exports = class MainWindow extends EventEmitter {
 			// Otherwise continue building ID list.
 			for (let i = 0; i < windowNames.length; i++) {
 				const winObj = await process
-					.applicationManager
+					.mainWindowProcessManager
 					.findWindowByName(windowNames[i]);
 				whiteListIds.push(winObj ? winObj.id : undefined);
 			}
@@ -861,7 +598,7 @@ module.exports = class MainWindow extends EventEmitter {
 	 */
 	static _annotatePreloadList(params) {
 		const {
-			finsembleDomain, preloadsAllowed, fileList, trustedPreloads
+			trustedDomain, preloadsAllowed, fileList, trustedPreloads
 		} = params;
 		const annotatedFileList = [];
 		// Create a list of permitted preloads from the preloads requested
@@ -884,7 +621,7 @@ module.exports = class MainWindow extends EventEmitter {
 				});
 
 				// @deprecate Remove in 4.0
-				// If the user suppliedi a valid URL (url and filename won't be equal), we need to
+				// If the user supplied a valid URL (url and filename won't be equal), we need to
 				// go ahead and permit the filename. This was the behavior in 3.8.x.
 				// It will be deprecated in 4.0.
 				if (url !== fileName) {
@@ -896,10 +633,7 @@ module.exports = class MainWindow extends EventEmitter {
 				}
 
 				// If preload permissions are disabled only allow trusted preloads to be loaded
-			} else if (trustedPreloads.includes(url)
-				// @deprecate filename in 4.0
-				|| trustedPreloads.includes(fileName)
-				|| MainWindow._isRequiredPreload(url, finsembleDomain)) {
+			} else if (trustedPreloads.includes(url)) {
 				annotatedFileList.push({
 					url,
 					isPermitted: true,
@@ -943,7 +677,7 @@ module.exports = class MainWindow extends EventEmitter {
 			fileList,
 			preloadsAllowed,
 			trustedPreloads: this.trustedPreloads,
-			finsembleDomain: params.finsembleDomain,
+			trustedDomain: params.trustedDomain
 		});
 
 
@@ -958,50 +692,19 @@ module.exports = class MainWindow extends EventEmitter {
 	}
 
 	/**
-	 * Checks if the preload is one required for Finsemble
-	 * The filenames listed are considered trusted only if they come from the same domain as finsemble is running in
-	 * @param {string} url
-	 * @param {string} finsembleDomain
-	 * @returns {boolean}
-	 */
-	static _isRequiredPreload(url, finsembleDomain) {
-		const requiredPreloads = ['FSBL.js', 'windowTitleBar.js'];
-		let currentURL;
-		try {
-			currentURL = new URL(url);
-		} catch (err) {
-			logger.error(`Preload will fail for ${url} because it is not valid url.`);
-			return requiredPreloads.includes(url);
-		}
-
-		if (currentURL && currentURL.hostname === finsembleDomain) {
-			for (const name of requiredPreloads) {
-				const urlName = getFilenameFromURL(url);
-				if (name === urlName) { return true; }
-			}
-		}
-		return false;
-	}
-
-	/**
 	 *
-	 * If a window is specified to have windowType 'application' or 'OpenfinApplication', it should be isolated.
-	 * This means that it cannot have an affinity. If this line is removed, FEA things that the window is both
-	 * an application _and_ grouped with other windows in the same affinity. This causes all manner of strange bugs.
-	 * The LauncherService in finsemble _should_ prevent this from happening. However, if someone bypasses
-	 * the finsemble API and creates a new window via `new fin.desktop.Window(params)`,
-	 * the code below fixes this strange state.
+	 * If a window is specified to have windowType 'application', it should be isolated.
 	 * @static
 	 * @param {browserWindowOptions} params
-	 * @param {string} applicationUUID
+	 * @param {string} windowProcessUUID
 	 * @returns string
 	 */
-	static _getAffinityForWindow(params, applicationUUID) {
-		let affinity = params.affinity || applicationUUID;
+	static _getAffinityForWindow(params, windowProcessUUID) {
+		let affinity = params.affinity || windowProcessUUID;
 
 		// if the window is an 'application', it cannot have an affinity. Default to the appUUID.
 		if (params.windowType && params.windowType.toLowerCase().includes('application')) {
-			affinity = applicationUUID;
+			affinity = windowProcessUUID;
 		}
 
 		return affinity;
@@ -1036,14 +739,10 @@ module.exports = class MainWindow extends EventEmitter {
 		}
 		// Store all of our windows in a global so they can be used across the application
 
-		// @todo can we reuse the 'objectPool' from finsemble?
-		allWindows[this.win.id] = this.win;
 		// @todo check if we are going to keep using windowStore
 		// or switch to something else to keep reference of params
 		windowStore.setParams(this.windowName, this.originalParams);
-		// Store all of our windows in a global so they can be used across e2o.
-		// TODO: We may want to find something better here instead of a global
-		global.windows[this.win.id] = this.win;
+		// Store all of our windows in a global so they can be used across sea.
 		this.id = this.win.id;
 		this.details = this.myOpts;
 
@@ -1067,7 +766,7 @@ module.exports = class MainWindow extends EventEmitter {
 			});
 		}
 
-		logger.log(`New browserwindow created: ${this.windowName} `);
+		logger.log(`New browserwindow created: ${this.windowName}, ${this.win.id}, ${this.win.webContents.id}`);
 	}
 
 	/**
@@ -1105,8 +804,9 @@ module.exports = class MainWindow extends EventEmitter {
 		// filter out any empty preloads
 		const preloadList = rawPreloadList.filter(p => !!p);
 		// Save the preload parameter into global, so that the renderer will have access to it.
-		// The preload list is then required in e2o.js
+		// The preload list is then required in sea.js
 		global.preload[this.windowName] = preloadList;
+		this.preloadList = preloadList;
 		logger.debug(`Downloaded preload files: ${stringify(preloadList)} `);
 	}
 
@@ -1129,7 +829,7 @@ module.exports = class MainWindow extends EventEmitter {
 			return preloadFilePath;
 		}
 		logger.debug(`Downloading preload file: ${preload.url}`);
-		const Cookie = await getCookieHeader(session.defaultSession);
+		const Cookie = await getCookieHeader(session.defaultSession, new URL(preload.url).hostname);
 		const downloadOptions = {};
 		if (Cookie) {
 			downloadOptions.headers = {

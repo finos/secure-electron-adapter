@@ -1,11 +1,13 @@
 const EventEmitter = require('events').EventEmitter;
-const { remote, ipcRenderer } = require('electron');
+const { ipcRenderer } = require('electron');
 const RequestHelper = require('./RequestHelper');
-const { accessDenied, checkAndLogAccessDenied } = require('../common/helpers');
+const { accessDenied, checkAndLogAccessDenied } = require('./common');
 const uuidV4 = require('uuid/v4');
 const logger = require('../logger/')();
 const stringify = require('../common/helpers/safeStringify');
-const currentRemoteWindow = remote.getCurrentWindow() || {};
+const WindowProcess = require('./WindowProcess')
+
+let hasPollingListener = false;
 
 class Window extends EventEmitter {
 	/**
@@ -15,14 +17,15 @@ class Window extends EventEmitter {
 	constructor(params, cb = Function.prototype) {
 		super();
 		this.appUUID = params.appUUID;
-		this.name = params.windowName ? params.windowName : params.name ? params.name : 'testname';
+		this.name = params.windowName || params.name || 'testname';
 		this.responses = {};
 		this.spawnCallback = cb;
+		this.bindAllFunctions()
 
 		// Make sure the polling listener is only added once per window. It needs to be added to application windows which come in
 		// with dontSpawn: true, so the listener needs to be setup before we get to actual window creation.
-		if (!currentRemoteWindow.hasPollingListener) {
-			currentRemoteWindow.hasPollingListener = true;
+		if (!hasPollingListener) {
+			hasPollingListener = true;
 			this.beginPollingListener.call(this);
 		}
 		// FIXME[Terry, Ryan, Erik] closeRequestedListeners should be moved to the main process. Currently, only closeRequested listeners from the current window are kept track
@@ -31,11 +34,11 @@ class Window extends EventEmitter {
 		// If we're just trying to get a reference to a window
 		if (params.dontSpawn) {
 			this.uuid = params.id;
-			ipcRenderer.on(`windowEvent-${this.name}`, this.remoteFSBLEvents.bind(this));
+			ipcRenderer.on(`windowEvent-${this.name}`, this.remoteEvents.bind(this));
 			return cb(this);
 		}
 
-		logger.verbose(`Creating a new Window from the fin API. ${stringify(params)}`);
+		logger.verbose(`Creating a new Window from the sea API. ${stringify(params)}`);
 		params.windowId = currentWindow.id;
 
 		// Use spawnAs process to force the window into it's own process.
@@ -47,7 +50,7 @@ class Window extends EventEmitter {
 			this.appUUID = params.affinity;
 			params.uuid = params.affinity;
 			params.appUUID = params.affinity;
-			// we need to send this to the application manager since this application may not exist.
+			// we need to send this to the windowProcess manager since this windowProcess may not exist.
 			return RequestHelper.sendRequest({ topic: 'createWindowWithAffinity', data: params }, this.onSpawnWithAffinityComplete.bind(this), cb);
 		}
 
@@ -59,17 +62,27 @@ class Window extends EventEmitter {
 		}, 1);
 	}
 
+	bindAllFunctions() {
+		const self = this;
+		for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(self))) {
+			const method = self[name];
+			// skip constructor
+			if (!(method instanceof Function) || method === Window) continue;
+			self[name] = self[name].bind(self);
+		}
+	}
+
 	/**
 	 * Add a listener to begin polling resources
 	 * Sends request to send the beginPollingResources request if polling has already begun
 	 */
 	beginPollingListener() {
 		ipcRenderer.on('beginPollingResources', this.beginPollingResources.bind(this));
-		RequestHelper.sendRequest({ topic: 'startPollingCheck', data: this.appUUID })
+		RequestHelper.sendRequest({ topic: 'startPollingCheck', data: this.appUUID });
 	}
 
 	/**
-	 * Begin polling cpu and memory information used by the application.
+	 * Begin polling cpu and memory information used by the windowProcess.
 	 * Immediately send the first measurement.
 	 */
 	beginPollingResources() {
@@ -77,7 +90,7 @@ class Window extends EventEmitter {
 		// This can happen when a window hangs and causes all other windows in the same event loop to stop polling
 		// On recovery the interval needs to be recreated or the windows won't properly send data.
 		if (this.resourcePoller) {
-			clearInterval(this.resourcePoller)
+			clearInterval(this.resourcePoller);
 		}
 		this.sendResourceUsage();
 		this.resourcePoller = setInterval(this.sendResourceUsage.bind(this), 1000);
@@ -104,7 +117,7 @@ class Window extends EventEmitter {
 	async sendResourceUsage() {
 		const cpuUsage = process.getCPUUsage().percentCPUUsage;
 
-		//get the process memory usage and convert it to the units expected by Finsemble
+		// get the process memory usage and convert it to KB
 		const memUsage = await process.getProcessMemoryInfo();
 		const memUsageRSS = memUsage.residentSet * 1024;
 
@@ -120,12 +133,12 @@ class Window extends EventEmitter {
 	 */
 	onSpawnWithAffinityComplete(eventObject, data) {
 		this.uuid = data.windowName;
-		ipcRenderer.on(`windowEvent-${this.uuid}`, this.remoteFSBLEvents.bind(this));
+		ipcRenderer.on(`windowEvent-${this.uuid}`, this.remoteEvents.bind(this));
 		eventObject.cb(null, this);
 	}
 
 	onSpawnComplete() {
-		ipcRenderer.on(`windowEvent-${this.uuid}`, this.remoteFSBLEvents.bind(this));
+		ipcRenderer.on(`windowEvent-${this.uuid}`, this.remoteEvents.bind(this));
 		if (this.spawnCallback) return this.spawnCallback(null, this);
 	}
 
@@ -139,7 +152,7 @@ class Window extends EventEmitter {
 	}
 
 	/**
-	 * Adds listeners for OpenFin events if permitted
+	 * Adds listeners for events if permitted
 	 * @param {String} eventName
 	 * @param {Function} listener
 	 */
@@ -159,16 +172,15 @@ class Window extends EventEmitter {
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	blur(cb1 = Function.prototype) {
+	blur(cb = Function.prototype) {
 		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-blur`, data: sendObject }, this.blurResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-blur`, data: sendObject }, this.blurResponse.bind(this), cb);
 	}
 
 	/**
-
+	 *
 	 * @param {Function} cb
 	 */
 	bringToFront(cb = Function.prototype) {
@@ -179,12 +191,11 @@ class Window extends EventEmitter {
 	/**
 	 *
 	 * @param {boolean} force
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	close(force = false, cb1 = Function.prototype, cb2) {
-		const sendObject = { id: this.uuid, name: this.name, force: force };
-		RequestHelper.sendRequest({ topic: `Window-${this.name}-close`, data: sendObject }, this.closeResponse.bind(this), cb1);
+	close(force = false, cb = Function.prototype) {
+		const sendObject = { id: this.uuid, name: this.name, force };
+		RequestHelper.sendRequest({ topic: `Window-${this.name}-close`, data: sendObject }, this.closeResponse.bind(this), cb);
 	}
 
 	/**
@@ -219,26 +230,6 @@ class Window extends EventEmitter {
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
-	 */
-	disableFrame(cb1 = Function.prototype, cb2) {
-		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-disableFrame`, data: sendObject }, this.disableFrameResponse.bind(this), cb1);
-	}
-
-	/**
-	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
-	 */
-	enableFrame(cb1 = Function.prototype, cb2) {
-		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-enableFrame`, data: sendObject }, this.enableFrameResponse.bind(this), cb1);
-	}
-
-	/**
-	 *
 	 * @param {String} script
 	 * @param {Function} cb
 	 */
@@ -250,22 +241,29 @@ class Window extends EventEmitter {
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	focus(cb1 = Function.prototype, cb2) {
+	focus(cb = Function.prototype) {
 		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-focus`, data: sendObject }, this.focusResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-focus`, data: sendObject }, this.focusResponse.bind(this), cb);
 	}
 
 	/**
 	 *
 	 * @param {Function} cb
-	 * @param {Function} cb2
 	 */
-	getBounds(cb = Function.prototype, cb2) {
+	getBounds(cb = Function.prototype) {
 		const sendObject = { type: 'window', id: this.uuid, name: this.name };
 		RequestHelper.sendRequest({ topic: `${this.name}-getBounds`, data: sendObject }, this.getBoundsResponse.bind(this), cb);
+	}
+
+	/**
+	 *
+	 * @param {Function} cb
+	 */
+	getBoundsFromSystem(cb = Function.prototype) {
+		const sendObject = { type: 'window', id: this.uuid, name: this.name };
+		RequestHelper.sendRequest({ topic: `${this.name}-getBoundsFromSystem`, data: sendObject }, this.getBoundsFromSystemResponse.bind(this), cb);
 	}
 
 	/**
@@ -276,21 +274,10 @@ class Window extends EventEmitter {
 	}
 
 	/**
-	 * This is a method that does nothing.
 	 *
 	 * @param {Function} cb
 	 */
-	getInfo(cb = Function.prototype) {
-		if (cb && typeof cb === 'function') {
-			return cb();
-		}
-	}
-
-	/**
-	 *
-	 * @param {Function} cb
-	 */
-	getOptions(cb = Function.prototype) { // this should be the window descr not the openfin manifest
+	getOptions(cb = Function.prototype) {
 		const sendObject = { type: 'window', id: this.uuid, name: this.name };
 		RequestHelper.sendRequest({ topic: `${this.name}-getDetails`, data: sendObject }, this.optionsResponse.bind(this), cb);
 	}
@@ -299,23 +286,21 @@ class Window extends EventEmitter {
 	 * @return {RenderApplication}
 	 */
 	getParentApplication() {
-		return new window.fin.desktop.Application({ uuid: this.appUUID, dontSpawn: true });
+		return new WindowProcess({ uuid: this.appUUID, dontSpawn: true });
 	}
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	hide(cb1 = Function.prototype, cb2) {
+	hide(cb = Function.prototype) {
 		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-hide`, data: sendObject }, this.hideResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-hide`, data: sendObject }, this.hideResponse.bind(this), cb);
 	}
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
 	isShowing(cb = Function.prototype) {
 		const sendObject = { type: 'window', id: this.uuid, name: this.name };
@@ -354,12 +339,11 @@ class Window extends EventEmitter {
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	restore(cb1 = Function.prototype, cb2) {
+	restore(cb = Function.prototype) {
 		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-restore`, data: sendObject }, this.restoreResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-restore`, data: sendObject }, this.restoreResponse.bind(this), cb);
 	}
 
 	/**
@@ -369,9 +353,8 @@ class Window extends EventEmitter {
 	 * @param {Number} width
 	 * @param {Number} height
 	 * @param {Function} cb
-	 * @param {Function} cb2
 	 */
-	setBounds(left, top, width, height, cb, cb2) {
+	setBounds(left, top, width, height, cb) {
 		const bounds = {
 			x: left,
 			y: top,
@@ -386,12 +369,11 @@ class Window extends EventEmitter {
 
 	/**
 	 *
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	show(cb1 = Function.prototype, cb2) {
+	show(cb = Function.prototype) {
 		const sendObject = { id: this.uuid, name: this.name };
-		RequestHelper.sendRequest({ topic: `${this.name}-show`, data: sendObject }, this.showResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-show`, data: sendObject }, this.showResponse.bind(this), cb);
 	}
 
 	/**
@@ -399,25 +381,23 @@ class Window extends EventEmitter {
 	 * @param {Number} left
 	 * @param {Number} top
 	 * @param {boolean} force
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	showAt(left, top, force, cb1 = Function.prototype, cb2) {
+	showAt(left, top, force, cb = Function.prototype) {
 		const sendObject = {
 			id: this.uuid, name: this.name, left, top
 		};
-		RequestHelper.sendRequest({ topic: `${this.name}-showAt`, data: sendObject }, this.showAtResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-showAt`, data: sendObject }, this.showAtResponse.bind(this), cb);
 	}
 
 	/**
 	 *
 	 * @param {Object} options
-	 * @param {Function} cb1
-	 * @param {Function} cb2
+	 * @param {Function} cb
 	 */
-	updateOptions(options, cb1 = Function.prototype, cb2) {
+	updateOptions(options, cb = Function.prototype) {
 		const sendObject = { id: this.uuid, name: this.name, options };
-		RequestHelper.sendRequest({ topic: `${this.name}-updateOptions`, data: sendObject }, this.updateOptionsResponse.bind(this), cb1);
+		RequestHelper.sendRequest({ topic: `${this.name}-updateOptions`, data: sendObject }, this.updateOptionsResponse.bind(this), cb);
 	}
 
 	/**
@@ -425,12 +405,12 @@ class Window extends EventEmitter {
 	 * @param {String} uuid
 	 * @param {String} windowName
 	 */
-	static wrap(uuid, windowName) {
-		logger.verbose(`Wrapping window ${windowName ? windowName : uuid}`);
-		const newWrap = new Window({
+	static fromNameAndUUID(uuid, windowName) {
+		logger.verbose(`Retrieving window ${windowName || uuid}`);
+		const newWin = new Window({
 			type: 'window', id: uuid, windowName, dontSpawn: true
 		});
-		return newWrap;
+		return newWin;
 	}
 
 	/**
@@ -473,26 +453,6 @@ class Window extends EventEmitter {
 	 * @param {RequestHelperEventObject} eventObject
 	 * @param {Object} data
 	 */
-	disableFrameResponse(eventObject, data) {
-		checkAndLogAccessDenied(data);
-		eventObject.cb(data);
-	}
-
-	/**
-	 * @private
-	 * @param {RequestHelperEventObject} eventObject
-	 * @param {Object} data
-	 */
-	enableFrameResponse(eventObject, data) {
-		checkAndLogAccessDenied(data);
-		eventObject.cb(data);
-	}
-
-	/**
-	 * @private
-	 * @param {RequestHelperEventObject} eventObject
-	 * @param {Object} data
-	 */
 	executeJavaScriptResponse(eventObject, data) {
 		checkAndLogAccessDenied(data);
 		eventObject.cb(data);
@@ -519,6 +479,16 @@ class Window extends EventEmitter {
 	 * @param {Object} data
 	 */
 	getBoundsResponse(eventObject, data) {
+		checkAndLogAccessDenied(data);
+		return eventObject.cb(data);
+	}
+
+	/**
+	 * @private
+	 * @param {RequestHelperEventObject} eventObject
+	 * @param {Object} data
+	 */
+	getBoundsFromSystemResponse(eventObject, data) {
 		checkAndLogAccessDenied(data);
 		return eventObject.cb(data);
 	}
@@ -568,7 +538,7 @@ class Window extends EventEmitter {
 	 * @param {ElectronEvent} event
 	 * @param {Object} data
 	 */
-	remoteFSBLEvents(event, data) {
+	remoteEvents(event, data) {
 		this.emit(data.topic, data.data);
 	}
 
@@ -639,91 +609,16 @@ class Window extends EventEmitter {
 	 */
 	windowResponses(event, data) {
 		if (this.responses[data.responseUUID]) {
-			logger.debug(`Window reponse: ${this.responses[data.responseUUID]}`);
+			logger.debug(`Window response: ${this.responses[data.responseUUID]}`);
 			this.responses[data.responseUUID].functionCB(this.responses[data.responseUUID], data);
 		}
 	}
-
-	animate(params, cb1 = Function.prototype, cb2) { // Not implemented
-		if (cb1 && typeof cb1 == 'function') {
-			cb1();
-		}
-	}
-
-	authenticate(userName, password, callback, errorCallback) { }
-
-	// Not implemented
-	flash() { }
-
-	// not implemented
-	getAllFrames() { }
-
-	// not implemented
-	getGroup() { }
-
-	// not implemented
-	getNativeWindow() { }
-
-	// deprecated
-	getParentWindow() { }
-
-	// deprecated
-	getState() { }
-
-	// not implemented
-	getZoomLevel() { }
-
-	// not implemented
-	joinGroup() { }
-
-	// not implemented
-	leaveGroup() { }
-
-	// not implemented
-	maximize() { }
-
-	// not implemented
-	moveBy() { }
-
-	// not implemented, use showAt
-	moveTo() { }
-
-	// not implemented, use showAt
-	navigate() { }
-
-	// not implemented
-	navigateBack() { }
-
-	// not implemented, use browser location navigation
-	navigateForward() { }
-
-	// not implemented, use browser location navigation
-	reload() { }
-
-	// not implemented, use browser location navigation
-	resizeBy() { }
-
-	// Not implemented, use setBounds
-	resizeTo() { }
-
-	// Not implemented, use setBounds
-	setAsForegroundColor() { }
-
-	// not implemented
-	setZoomLevel() { }
-
-	// not implemented
-	stopFlashing() { }
-
-	// not implemented
-	stopNavigation() { } // not implemented
 }
 
 const requestObject = {
 	topic: 'syncWindowInfo',
-	data: { id: currentRemoteWindow.id }
 };
-const response = ipcRenderer.sendSync('e2o.mainRequest', requestObject);
+const response = ipcRenderer.sendSync('sea.mainRequest', requestObject);
 let currentWindow = new Window({
 	dontSpawn: true, id: response.uuid, appUUID: response.uuid, windowName: response.windowName
 });

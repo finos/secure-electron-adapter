@@ -13,9 +13,13 @@ describe('DownloadOrCache', () => {
 		it('should return an error if file path is missing', (done) => {
 			const params = {};
 			downloadCache(params, (e, r) => {
-				expect(e).to.be.instanceOf(Error);
-				expect(r).to.equal(null);
-				done();
+				try {
+					expect(e).to.be.instanceOf(Error);
+					expect(r).to.equal(null);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 		it('should return an error if fromPath is missing', (done) => {
@@ -23,9 +27,13 @@ describe('DownloadOrCache', () => {
 				fileName: 'booger.png',
 			};
 			downloadCache(params, (e, r) => {
-				expect(e).to.be.instanceOf(Error);
-				expect(r).to.equal(null);
-				done();
+				try {
+					expect(e).to.be.instanceOf(Error);
+					expect(r).to.equal(null);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 
@@ -36,9 +44,13 @@ describe('DownloadOrCache', () => {
 			};
 			// By invalidating the cache on a file that we haven't previously downloaded, it will fail.
 			downloadCache(params, (e, r) => {
-				expect(e).to.be.instanceOf(Error);
-				expect(r).to.equal(null);
-				done();
+				try {
+					expect(e).to.be.instanceOf(Error);
+					expect(r).to.equal(null);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 
@@ -50,9 +62,13 @@ describe('DownloadOrCache', () => {
 				fromPath: 'httz://wgopgpogpe.boo.com/blahblah.png',
 			};
 			downloadCache(params, (e, r) => {
-				expect(e).to.be.instanceOf(Error);
-				downloadPaths.push(r);
-				done();
+				try {
+					expect(e).to.be.instanceOf(Error);
+					downloadPaths.push(r);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 	});
@@ -67,10 +83,14 @@ describe('DownloadOrCache', () => {
 				fromPath: SPOON_URL,
 			};
 			downloadCache(params, (e, r) => {
-				expect(e).to.equal(null);
-				expect(r.includes(DEFAULT_CACHE_PATH)).to.equal(true);
-				downloadPaths.push(r);
-				done();
+				try {
+					expect(e).to.equal(null);
+					expect(r.includes(DEFAULT_CACHE_PATH)).to.equal(true);
+					downloadPaths.push(r);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 
@@ -88,10 +108,14 @@ describe('DownloadOrCache', () => {
 				cachePath: __dirname,
 			};
 			downloadCache(params, (e, r) => {
-				expect(e).to.equal(null);
-				expect(r.includes(__dirname)).to.equal(true);
-				downloadPaths.push(r);
-				done();
+				try {
+					expect(e).to.equal(null);
+					expect(r.includes(__dirname)).to.equal(true);
+					downloadPaths.push(r);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 
@@ -105,10 +129,14 @@ describe('DownloadOrCache', () => {
 			const filePath = path.join(__dirname, SPOON_FILENAME);
 			const initialStats = fs.statSync(filePath);
 			downloadCache(params, (e, r) => {
-				expect(e).to.equal(null);
-				const downloadStats = fs.statSync(r);
-				expect(JSON.stringify(initialStats.mtime)).to.equal(JSON.stringify(downloadStats.mtime));
-				done();
+				try {
+					expect(e).to.equal(null);
+					const downloadStats = fs.statSync(r);
+					expect(JSON.stringify(initialStats.mtime)).to.equal(JSON.stringify(downloadStats.mtime));
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 
@@ -122,11 +150,15 @@ describe('DownloadOrCache', () => {
 			const filePath = path.join(__dirname, SPOON_FILENAME);
 			const initialStats = fs.statSync(filePath);
 			downloadCache(params, (e, r) => {
-				expect(e).to.equal(null);
-				const downloadStats = fs.statSync(r);
-				// If the file's mtime (modified time) are not equal, we can be confident that it was retrieved from the url provided.
-				expect(JSON.stringify(initialStats.mtime)).to.not.equal(JSON.stringify(downloadStats.mtime));
-				done();
+				try {
+					expect(e).to.equal(null);
+					const downloadStats = fs.statSync(r);
+					// If the file's mtime (modified time) are not equal, we can be confident that it was retrieved from the url provided.
+					expect(JSON.stringify(initialStats.mtime)).to.not.equal(JSON.stringify(downloadStats.mtime));
+					done();
+				} catch (e) {
+					done(e);
+				}
 			});
 		});
 	});

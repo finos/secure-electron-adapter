@@ -1,22 +1,20 @@
 const EventEmitter = require('events').EventEmitter;
 const {
-	dialog, screen, powerMonitor, session
+	dialog, screen, powerMonitor, session, net
 } = require('electron');
 const path = require('path');
-const ExternalApplicationManager = require('./externalProcesses/ExternalApplicationManager');
-const ApplicationManager = require('./ApplicationManager');
+const MainWindowProcessManager = require('./MainWindowProcessManager');
 const MainBus = require('./MainBus');
-const IAC = require('../IAC/Transport');
 const MainSystem = require('./MainSystem');
 const getFlag = require('../common/getFlag');
+const checkURLDownloadable = require('../common/checkURLDownloadable');
 const windowStore = require('../common/helpers/windowsStore');
 const logger = require('../logger/')();
 const PermissionsManager = require('../permissions/PermissionsManager');
-const { clearPreloadCache } = require('../common/helpers');
+const { clearPreloadCache, checkManifestHasRequiredProperties } = require('../common/helpers');
 const CSPParser = require('../common/helpers/cspParser');
-const appData = require('./helpers/getAppDataFolderSync')();
+const appData = require('./helpers/getAppDataFolderSync').folderPath;
 
-const options = {};
 const manifest = getFlag('--manifest');
 const setupRemoteModuleSecurity = require('./security/remoteModuleSecurity/setupRemoteModuleSecurity');
 // The default value of the Content-Security-Policy key.
@@ -25,16 +23,13 @@ const DEFAULT_CSP = 'respect-server-defined-csp';
 const CSP_KEY_NAME = 'Content-Security-Policy';
 const { isValidURL, getFilenameTrustedPreloadDeprecationWarning } = require('../common/helpers');
 
-if (manifest) {
-	options.manifest = manifest;
-}
+const CommonConfig = require('../common/helpers/Config.js');
+
 class Main extends EventEmitter {
 	constructor() {
 		super();
-		this.IAC = null;
 		this.app = null;
 		this.assimConnection;
-		global.preload = {};
 		this.bindMethods();
 	}
 
@@ -43,7 +38,6 @@ class Main extends EventEmitter {
 	 * @returns {void}
 	 */
 	bindMethods() {
-		this.startIAC = this.startIAC.bind(this);
 		this.onHeadersReceived = this.onHeadersReceived.bind(this);
 		this._onWebContentsCreated = this._onWebContentsCreated.bind(this);
 		this._onNewWindowHandler = this._onNewWindowHandler.bind(this);
@@ -51,26 +45,47 @@ class Main extends EventEmitter {
 	}
 
 	/**
+	 * Verify the manifest is legal -- if not notify user of the problem with showErrorBox and exit.
+	 *
+	 * NOTE: *** will exit here if error since can't continue starting system. ***
+	 *
+	 * @param {object} manifest
+	 */
+	async verifyManifest(manifest) {
+		logger.debug('Startup Manifest', manifest);
+
+		let fatalErrorMessage = checkManifestHasRequiredProperties(manifest);
+		if (!fatalErrorMessage) {
+			try {
+				await checkURLDownloadable(manifest.main.url);
+			} catch (err) {
+				fatalErrorMessage = err;
+			}
+		}
+
+		if (fatalErrorMessage) {
+			dialog.showErrorBox('Electron Adaptor: FATAL ERROR', fatalErrorMessage);
+			process.exit(1);
+		}
+	}
+
+	/**
 	 * This will initialize the Electron application
 	 * @param {Electron App} app
 	 * @param {object} manifest Optional, for unit tests
 	 */
-	init(app, manifest) {
-		if (manifest) {
-			options.manifest = manifest;
-		}
+	async init(app, manifest) {
+		this.manifest = CommonConfig.initManifestWithDefaults(manifest);
+		// wait for the verification before proceeding (otherwise a fatal-error in showErrorBox can be hidden by the splash screen).
+		// *** if veryifyManifet fails then it displays an error and exits system, thus never returning ***
+		await this.verifyManifest(this.manifest);
 
-		if (!options.manifest) {
-			logger.error('FATAL: No manifest provided. Exiting the application.');
-			dialog.showErrorBox('Unavailable Manifest', 'FATAL: No manifest provided to init.');
-			process.exit(1);
-		}
-		this.manifest = manifest;
 		// Set the minimum logging level
-		const loggerConfig = this.manifest['secure-electron-adapter'] || { logger: {} };
-		if (loggerConfig.logger && loggerConfig.logger.logLevel) {
-			logger.setLevel(loggerConfig.logger.logLevel);
-		}
+		const seaConfig = this.manifest['secure-electron-adapter'];
+		const logLevel = seaConfig.logger.logLevel;
+		seaConfig.logger.transports.console.enable && logger.enableConsole();
+		logLevel && logger.setLevel(logLevel);
+
 		// delete preload cache when electron starts
 		clearPreloadCache();
 		this.app = app; // Store the app here for reference
@@ -91,8 +106,6 @@ class Main extends EventEmitter {
 	 */
 	validateTrustedPreloadArray() {
 		logger.debug('Main->validateTrustedPreloadArray');
-		// @todo pull electronAdapter out of this.manifest.electronAdapter and remove the first check.
-		// this.manifest.electronAdapter should always exist..
 		if (this.manifest.electronAdapter
 			&& Array.isArray(this.manifest.electronAdapter.trustedPreloads)) {
 			this.manifest.electronAdapter.trustedPreloads.forEach((preload) => {
@@ -126,7 +139,8 @@ class Main extends EventEmitter {
 		// Before sending HTTP(S) requests.
 		const { session } = contents;
 		if (session && session.webRequest) {
-			session.webRequest.onBeforeRequest([], this._onBeforeRequest);
+			// new as of electron 6.0.1. Previously it used to be session.webRequest.onBeforeRequest([], this._onBeforeRequest);
+			session.webRequest.onBeforeRequest({ urls: [] }, this._onBeforeRequest);
 		}
 		// When attaching a webview, disable preload, preloadURL and nodeIntegration
 		contents.on('will-attach-webview', this._onWillAttachWebViewHandler);
@@ -173,18 +187,20 @@ class Main extends EventEmitter {
 		} catch (err) {
 			return logger.error(`Failed to create new browser window: Invalid URL ${url}`);
 		}
-		if (aboutURL.protocol === 'chrome-devtools:') {
-			// If the window is a chrome console, just ignore and return.
+		// If the window is a chrome console, just ignore and return, otherwise an extra blank window will launch  
+		// The URL protocol for the chrome console changed from 'chrome-devtools' to 'devtools' sometime between electron 4.2.12 and electron 7.1.2. 
+		// Returning in both cases for backwards compatibility. This path is only triggered when opening devtools with ctrl+shift+i.
+		if (aboutURL.protocol === 'devtools:' || aboutURL.protocol === 'chrome-devtools:') {			
 			return;
 		}
 		event.preventDefault();
-		// @todo This is a workaround that doesn't break window.open but doesn't bring that window into the fold.
-		process.applicationManager.spawnWithAffinityRequest({
+		// This is a hack that doesn't break window.open but doesn't bring that window into the fold.
+		process.mainWindowProcessManager.spawnWithAffinityRequest({
 			data: {
 				affinity: frameName,
 				windowName: frameName,
 				url,
-				autoShow: true
+				visible: true
 			},
 			respond: Function.prototype
 		});
@@ -202,10 +218,10 @@ class Main extends EventEmitter {
 		const localhostRegex = /^https?:\/\/localhost:\d+/i;
 		const devtools = /^chrome-devtools.*/i;
 
-		const { feaURLWhitelist } = this.manifest.electronAdapter;
+		const { seaURLWhitelist } = this.manifest.electronAdapter;
 		const { url } = request;
 		let cancel = false;
-		// Ignore when its a local electronAdapter request
+		// Ignore when its a local request
 		if (devtools.test(url) || localhostRegex.test(url)) {
 			return callback({});
 		}
@@ -215,11 +231,11 @@ class Main extends EventEmitter {
 		}
 		// Here we decide whether we need to cancel the
 		// request or not based on our given regex
-		if (feaURLWhitelist) {
+		if (seaURLWhitelist) {
 			try {
-				cancel = !this._isPermittedURL(feaURLWhitelist, url);
+				cancel = !this._isPermittedURL(seaURLWhitelist, url);
 			} catch (error) {
-				logger.error(`Invalid feaURLWhitelist: ${error.message}`);
+				logger.error(`Invalid seaURLWhitelist: ${error.message}`);
 			}
 		}
 
@@ -236,7 +252,7 @@ class Main extends EventEmitter {
 	 * Gets a manifest entry given an object chain in string form. If the object chain doesn't exist, then null will be returned.
 	 * @param {string} chain
 	 * @example
-	 * getManifestEntry("electronAdapter.foo.bar");
+	 * getManifestEntry("splashScreenImage");
 	 */
 	getManifestEntry(chainString) {
 		logger.verbose('main->getManifestEntry', chainString);
@@ -254,48 +270,11 @@ class Main extends EventEmitter {
 	}
 
 	/**
-   * Starts Inter-Application Communication. host, port and secure are derived from the manifest entry if available.
-   * electronAdapter.IAC.serverAddress
-   */
-	startIAC() {
-		if (this.IAC) {
-			logger.log('IAC already started, no need to restart');
-			return; // If IAC is already defined (like after a restart), we don't need to spin it up again.
-		}
-		logger.log('APPLICATION LIFECYCLE: Starting the IAC');
-		let address = this.getManifestEntry(
-			'electronAdapter.router.transportSettings.FinsembleTransport.serverAddress'
-		);
-		if (!address) {
-			address = this.getManifestEntry('electronAdapter.IAC.serverAddress');
-		}
-		if (!address) {
-			address = '';
-			logger.warn('Did not find serverAddress for IAC in the manifest.');
-		}
-		const arr = address.split(':');
-		const protocol = arr[0];
-		let host = arr[1];
-		const port = arr[2];
-		let options = null;
-		// take off the slashed that came from split("wss://host");
-		if (host && host.substring(0, 2) == '//') host = host.substring(2);
-
-		// If "ws" is explicitly set then force the IAC to run insecure
-		if (protocol === 'ws') {
-			options = { secure: false };
-		}
-		this.IAC = new IAC(port, host, options);
-		this.IAC.connect();
-	}
-
-	/**
 	 * Perform any work necessary to start application
 	 * load manifest from url
 	 * display splash screen
 	 * create external application manager
 	 * download any assets for external applications
-	 * start IAC
 	 * create MainSystem
 	 * create our first application using application manager
 	 *
@@ -307,38 +286,24 @@ class Main extends EventEmitter {
 		const splashScreenImage = this.getManifestEntry('splashScreenImage');
 		if (splashScreenImage) {
 			const manifestTimeout = this.getManifestEntry('splashScreenTimeout');
-			ApplicationManager.showSplashScreen(splashScreenImage, manifestTimeout)
+			MainWindowProcessManager.showSplashScreen(splashScreenImage, manifestTimeout)
 				.catch(err => logger.error(`Unable to load splash screen ${err}`));
 		}
 
 		// https://docs.microsoft.com/en-us/windows/desktop/shell/appids
-		this.app.setAppUserModelId(this.getManifestEntry('startup_name.name') || 'e2o');
+		this.app.setAppUserModelId(this.getManifestEntry('startup_name.name') || 'sea');
 		this.app.manifest = manifest;
-		// Set up the external application manager and then download any required assets
-		const externalAssetsEntry = this.getManifestEntry('externalAssets') || {};
-		if (!externalAssetsEntry.assetsFolder) {
-			externalAssetsEntry.assetsFolder = path.join(appData, 'e2o', 'assets');
-		}
-		logger.log(`Setting externalAssetsFolder to: ${externalAssetsEntry.assetsFolder}`);
 
-		this.app.externalApplicationManager = new ExternalApplicationManager(externalAssetsEntry);
+		PermissionsManager.setDefaultPermissions(manifest.electronAdapter.permissions);
+		MainWindowProcessManager.setManifest(manifest);
 
-		logger.log('APPLICATION LIFECYCLE: Preparing to download assets');
-		// @todo make async/wait. No need for this cb pyramid
-		this.app.externalApplicationManager.downloadAssets(this.getManifestEntry('appAssets'), () => {
-			logger.log('APPLICATION LIFECYCLE: Successfully downloaded assets');
-			this.startIAC();
-
-			// set default permissions on the PermissionsManager
-			PermissionsManager.setDefaultPermissions(manifest.electronAdapter.permissions);
-			ApplicationManager.setManifest(manifest);
-
-			logger.log(`APPLICATION LIFECYCLE: Starting main application ${manifest.startup_app.name}`);
-			ApplicationManager.createApplication(manifest.startup_app, manifest, null, (err, res) => {
-				if (err) logger.error(`Failed to start main application ${err}`);
-				logger.log('APPLICATION LIFECYCLE: Main application started.');
-			});
+		manifest.main.icon = manifest.main.applicationIcon;
+		logger.log(`APPLICATION LIFECYCLE: Starting main application ${manifest.main.name}`);
+		MainWindowProcessManager.createWindowProcess(manifest.main, manifest, null, (err, res) => {
+			if (err) logger.error(`Failed to start main application ${err}`);
+			logger.log('APPLICATION LIFECYCLE: Main application started.');
 		});
+
 		this.setContentSecurityPolicy();
 		this.setupChromePermissionsHandlers();
 	}
@@ -360,7 +325,7 @@ class Main extends EventEmitter {
 			.defaultSession
 			.setPermissionRequestHandler(async (webContents, permission, callback) => {
 				// Get the window and check to see if it's allowed to do something (e.g., geolocation, notifications).
-				const win = await ApplicationManager.findWindowById(webContents.id);
+				const win = await MainWindowProcessManager.findWindowById(webContents.id);
 				const permissionAllowed = PermissionsManager.checkPermission(win, `Window.chromePermissions.${permission}`);
 				if (!permissionAllowed) {
 					logger.warn('Permission disallowed. Permission:', permission, 'URL:', webContents.getURL());
@@ -371,7 +336,6 @@ class Main extends EventEmitter {
 
 	/**
 	 * Invoked when headers are received. Modifies responseHeaders to update CSP
-	 * Matt believes that CSP work on the 1st-defined principle.
 	 * So if the system says 'don't do this' but the component says 'do this', it will not do this.
 	 * @param {object} details The response headers
 	 * @param {function} callback Callback to be invoked when headers received.
@@ -472,7 +436,7 @@ class Main extends EventEmitter {
 		});
 
 		screen.addListener('display-metrics-changed', (event, display, changeMetrics) => {
-			logger.log('APPLICATION LIFECYCLE: Monitor display metrics changed.');
+			logger.log('APPLICATION LIFECYCLE: Monitor display metrics changed.', JSON.stringify(display));
 			MainBus.sendEvent('systemEvent.monitor-info-changed');
 		});
 
@@ -486,10 +450,10 @@ class Main extends EventEmitter {
 			MainBus.sendEvent('systemEvent.session-changed');
 		});
 
-		PermissionsManager.addRestrictedListener('restartE2O', this.startApp); // nothing sends this event
+		PermissionsManager.addRestrictedListener('restartSEA', this.startApp); // nothing sends this event
 	}
 }
 const main = new Main();
 // for debugging.
-process.MainApplication = main;
+process.MainWindowProcess = main;
 module.exports = main;

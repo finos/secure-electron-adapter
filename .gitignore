@@ -26,3 +26,5 @@ src/externalApp/.vs
 persistence
 logs/
 deploy/configs/**.json
+exports.js
+.gulp/

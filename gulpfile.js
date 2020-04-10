@@ -1,7 +1,6 @@
 const exec = require('child_process').exec;
 const gulp = require('gulp');
-const electron = require('electron');
-const proc = require('child_process');
+const { parallel } = require('gulp');
 const ON_DEATH = require('death')({ debug: true });
 const webpackStream = require('webpack-stream');
 const webpack = require('webpack');
@@ -24,70 +23,28 @@ ON_DEATH((signal, err) => {
 
 process.env.ELECTRON_DEV = true;
 
-function launchElectron(env) {
-	let manifest = 'http://localhost:3375/configs/openfin/manifest-local.json';
-	if (env === 'dev') {
-		manifest = 'https://dev.finsemble.com/configs/openfin/manifest-dev.json';
-	}
-	electronChild = exec(`set ELECTRON_DEV=true && node_modules\\electron\\dist\\electron.exe index.js --remote-debugging-port=9090 --manifest ${manifest}`,
-		{
-
-		}, (error, stdout, stderr) => {
-		});
-
-	electronChild.stdout.on('data', (data) => {
-		console.log(data.toString());
-		if (data.toString().indexOf("Finished 'dev:noLaunch'") > -1) {
-			console.log('dev server is up');
-		}
-	});
-
-	electronChild.stderr.on('data', (data) => {
-		console.error('stderr:', data.toString());
-	});
-
-	electronChild.on('close', (code) => {
-		console.log(`child process exited with code ${code}`);
-	});
-	process.on('exit', () => {
-		electronChild.kill();
-	});
-}
-function launchSeedServer(env) {
-	const seedServer = exec('node ./node_modules/gulp/bin/gulp.js  dev:noLaunch --gulpfile ./finsemble-seed/gulpfile.js', (error, stdout, stderr) => {
-	});
-	seedServer.stdout.on('data', (data) => {
-		console.log('server Output:', data);
-		if (data.indexOf("Finished 'dev:noLaunch'") > -1) {
-			launchElectron(env);
-		}
-	});
-
-	seedServer.stderr.on('data', (data) => {
-		console.error('server error:', data);
-	});
-
-	seedServer.on('close', (code) => {
-		console.log(`child process exited with code ${code}`);
-	});
-	process.on('exit', () => {
-		seedServer.kill();
-	});
-}
-
-
-// Run the seed server (e.g. localhost:3375) dependency, which then launches electron on the desktop
-gulp.task('default', () => {
-	// launchSeedServer('local');
-});
-
-// Run just electron. Assumes that a Finsemble server is already running (for instance running finsemble-seed in a separate window on port 3375)
-gulp.task('dev', () => {
-	launchElectron('dev');
-});
 /**
- * Build our e2o preload file. We must do this for sandbox mode
+ * Build SEA (both main and renderer)
  */
-gulp.task('buildE2O', () => gulp.src(path.join(__dirname, './src/e2o.js'))
-	.pipe(webpackStream(require('./build/e2o.js'), webpack))
-	.pipe(gulp.dest(path.join(__dirname, './dist/'))));
+function buildRenderer(done) {
+	const stream = gulp.src(path.join(__dirname, './src/sea.js'))
+		.pipe(webpackStream(require('./build/webpack.renderer.js'), webpack))
+		.pipe(gulp.dest(path.join(__dirname, './dist/')));
+	stream.on('end', () => done());
+}
+
+function buildMain(done) {
+	const stream = gulp.src([path.join(__dirname, './devIndex.js')])
+		.pipe(webpackStream(require('./build/webpack.index.js'), webpack))
+		.pipe(gulp.dest(path.join(__dirname, './dist/')));
+	stream.on('end', () => done());
+}
+
+function buildExports(done) {
+	const stream = gulp.src(path.join(__dirname, './src/exports.ts'))
+		.pipe(webpackStream(require('./build/webpack.exports.js'), webpack))
+		.pipe(gulp.dest(path.join(__dirname, './')));
+	stream.on('end', () => done());
+}
+
+gulp.task('buildSEA', parallel(buildMain, buildRenderer, buildExports));

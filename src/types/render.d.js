@@ -1,7 +1,7 @@
 /**
- * RenderApplication represents a render process application preload in e2o
+ * WindowProcess represents a render process application preload in sea
  *
- * @typedef {Object} RenderApplication
+ * @typedef {Object} WindowProcess
  *
  * @property {String} name name of application
  * @property {String} uuid unique identifier of application
@@ -11,15 +11,9 @@
  */
 
 /**
- * InterApplicationBus
+ * MessageBus
  *
- * @typedef {Object} InterApplicationBus
- */
-
-/**
- * RenderNotification
- *
- * @typedef {Object} RenderNotification
+ * @typedef {Object} MessageBus
  */
 
 /**
@@ -35,11 +29,11 @@
  */
 
 /**
- * RenderWindow
+ * WindowProcess
  *
- * @typedef {Object} RenderWindow
+ * @typedef {Object} WindowProcess
  *
- * @property {String} appUUID unique identifier for parent application
+ * @property {String} appUUID unique identifier for parent WindowProcess
  * @property {String} name name of window
  * @property {String} uuid unique idenifier for window
  * @property {Object[]} responses it doesn' look like this is used

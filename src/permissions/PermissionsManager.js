@@ -82,7 +82,7 @@ class PermissionsManager {
 	 *  * Refer to defaultWindowOptions.js for a list of available permissions
 	 *
 	 * This function will pass a permission check unless it's explicity false.
-	 * This is because we don't want Finsemble to break if a permission is missing from the main list, or if an object has been removed (such as on shutdown)
+	 * This is because we don't want the application to break if a permission is missing from the main list, or if an object has been removed (such as on shutdown)
 	 * In the case of a missing permission, log it so it can be added to defaultWindowOptions.js later.
 	 * We do the same if the object to look in is empty or missing a permissions section. This can happen on shutdown as windows close, but may also be an error.
 	 * @param {Object} obj
@@ -116,7 +116,7 @@ class PermissionsManager {
 		const modifiedHandler = async (e) => {
 			if (permission) {
 				const name = e.sender.browserWindowOptions.name;
-				const mainWin = await process.applicationManager.findWindowByName(name);
+				const mainWin = await process.mainWindowProcessManager.findWindowByName(name);
 				if (this.checkPermission(mainWin, permission)) {
 					logger.verbose(`PermissionsManager->addRestrictedListener Permission allowed: ${permission}`);
 					handler(e);

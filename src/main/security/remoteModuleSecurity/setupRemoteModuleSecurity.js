@@ -6,7 +6,7 @@ const allowedElectronModules = new Set();
 const allowedGlobals = new Set(['preload']);
 const logger = require('../../../logger/')();
 /**
- * FEA turns off node integration in render processes, so require is not usable by default. You can still
+ * SEA turns off node integration in render processes, so require is not usable by default. You can still
  * use it in preloads. All requests using the remote module are caught and tested here for security.
  *
  * @example this will not work because we disallow all modules except fsProxied and path :)

@@ -1,7 +1,7 @@
-const transports = require('./transports');
+const fileTransport = require('./transports/winston-daily-rotate-file');
 
 module.exports = {
-	transports,
+	transports: [ fileTransport ],
 	level: 'debug',
 	levels: {
 		error: 0,

@@ -1,7 +1,7 @@
 /**
-* Global e2o permissions
+* Global sea permissions
 *
-* @typedef {Object} e2oPermissions
+* @typedef {Object} seaPermissions
 *
 * @property {ChromiumPermission[]} chromiumPermissions list of Chromium requiring user approval
 * @property {WebPreferencesPermissions} webPreferencesPermissions allow / disallow configuration of webPreference settings
@@ -9,7 +9,7 @@
 */
 
 /**
-* e2o permissions for web preferences
+* sea permissions for web preferences
 *
 * @typedef {Object} WebPreferencesPermissions
 *

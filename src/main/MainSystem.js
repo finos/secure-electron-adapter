@@ -2,9 +2,10 @@ const EventEmitter = require('events').EventEmitter;
 const download = require('../common/download');
 const fs = require('fs');
 const electron = require('electron');
+const process = require('process');
 const os = require('os');
 const si = require('systeminformation');
-const appData = require('./helpers/getAppDataFolderSync')();
+const appData = require('./helpers/getAppDataFolderSync').folderPath;
 const logger = require('../logger/')();
 const { clearPreloadCache } = require('../common/helpers');
 const path = require('path');
@@ -33,7 +34,8 @@ node-notifier: works but application shows up as "SnoreToast" and the method to 
 
 
 const notifier = require('node-notifier');
-const ApplicationManager = require('./ApplicationManager');
+const MainWindowProcessManager = require('./MainWindowProcessManager');
+const MainWindow = require('./MainWindow');
 const MainBus = require('./MainBus');
 const PermissionsManager = require('../permissions/PermissionsManager');
 
@@ -48,9 +50,8 @@ class MainSystem extends EventEmitter {
 	constructor(app) {
 		super();
 		this.app = app;
-		this.trayIconByApplication = {};
+		this.trayByWindowProcess = {};
 		this.tray;
-		this.MonitorInfo = require('./MonitorInfo');// app must be ready before we call this
 		this.bind();
 		this.setupListeners();
 		logger.log('APPLICATION LIFECYCLE: Creating MainSystem');
@@ -58,28 +59,47 @@ class MainSystem extends EventEmitter {
 		this.app.on('window-all-closed', () => {
 			logger.log('APPLICATION LIFECYCLE: All windows closed.');
 			if (this.restarting) {
-				logger.log('APPLICATION LIFECYCLE: Restarting FEA.');
+				logger.log('APPLICATION LIFECYCLE: Restarting SEA.');
 				return;
 			}
-			this.quit();
+			this.exit();
 		});
+
+		// set timer to notify user if startup app never completes startup handshake.  Timer is cleared when handshake is done (see startupApplicationHandshake below);
+		// a 10 second timeout should be more than enough time since the handshake should be the first action the startup application takes
+		this.startupApplicationHandshakeTimer = setTimeout(() => {
+			// confirm in manifest that should check for handshake from primary application -- note by default the check is disabled
+			// note: have to check manifest inside the timer because it's not available in the constructor
+			if (this.app.manifest.main.requireHandshake) {
+				// because the startup app has been invoked, with more things that can go wrong, so a notification is more appropriate here than a showErrorBox
+				const notificationData = {
+					data: {
+						title: "Electron Adaptor",
+						message: `The primary application ${this.app.manifest.main.uuid} never signaled it started successfully. Administrator, please verify manifest.main.url is correct.`,
+						wait: true // wait should keep the notification up until user closes, but this doesn't seem to work
+					}
+				};
+				this.notification(notificationData);
+			}
+		}, 10000);
 	}
 
 	bind() {
-		this.quit = this.quit.bind(this);
+		this.exit = this.exit.bind(this);
 		this.getVersion = this.getVersion.bind(this);
-		this.openUrlWithBrowser = this.openUrlWithBrowser.bind(this);
-		this.getHostSpecs = this.getHostSpecs.bind(this);
+		this.startupApplicationHandshake = this.startupApplicationHandshake.bind(this);
+		this.getSystemInfo = this.getSystemInfo.bind(this);
 		this.getMonitorInfo = this.getMonitorInfo.bind(this);
 		this.flushStorage = this.flushStorage.bind(this);
 		this.getMousePosition = this.getMousePosition.bind(this);
-		this.launchExternalProcess = this.launchExternalProcess.bind(this);
-		this.restartApplication = this.restartApplication.bind(this);
+		this.restartWindowProcess = this.restartWindowProcess.bind(this);
 		this.getProcessList = this.getProcessList.bind(this);
 		this.notification = this.notification.bind(this);
-		this.setTrayIcon = this.setTrayIcon.bind(this);
-		this.getTrayIconInfo = this.getTrayIconInfo.bind(this);
-		this.removeTrayIcon = this.removeTrayIcon.bind(this);
+		this.setTray = this.setTray.bind(this);
+		this.getTrayInfo = this.getTrayInfo.bind(this);
+		this.removeTray = this.removeTray.bind(this);
+		this.restartAndInstallUpdate = this.restartAndInstallUpdate.bind(this);
+		this.getEnvironmentVariable = this.getEnvironmentVariable.bind(this);
 	}
 
 	/**
@@ -87,37 +107,37 @@ class MainSystem extends EventEmitter {
 	 */
 	setupListeners() {
 		PermissionsManager.addRestrictedListener('clearCache', this.clearCache, 'System.clearCache');
-		PermissionsManager.addRestrictedListener('quit', this.quit, 'System.exit');
+		PermissionsManager.addRestrictedListener('exit', this.exit, 'System.exit');
 		PermissionsManager.addRestrictedListener('getVersion', this.getVersion, 'System.getVersion');
-		PermissionsManager.addRestrictedListener('openUrlWithBrowser', this.openUrlWithBrowser, 'System.openUrlWithBrowser');
-		PermissionsManager.addRestrictedListener('getHostSpecs', this.getHostSpecs, 'System.getHostSpecs');
+		PermissionsManager.addRestrictedListener('startupApplicationHandshake', this.startupApplicationHandshake, 'System.startupApplicationHandshake');
+		PermissionsManager.addRestrictedListener('getSystemInfo', this.getSystemInfo, 'System.getSystemInfo');
 		PermissionsManager.addRestrictedListener('getMonitorInfo', this.getMonitorInfo, 'System.getMonitorInfo');
 		PermissionsManager.addRestrictedListener('flushStorage', this.flushStorage, 'System.flushStorage');
 		PermissionsManager.addRestrictedListener('getMousePosition', this.getMousePosition, 'System.getMousePosition');
-		PermissionsManager.addRestrictedListener('launchExternalProcess', this.launchExternalProcess, 'System.launchExternalProcess');
-		PermissionsManager.addRestrictedListener('restartApplication', this.restartApplication, 'Application.restartApplication');
+		PermissionsManager.addRestrictedListener('restartWindowProcess', this.restartWindowProcess, 'WindowProcess.restartWindowProcess');
 		PermissionsManager.addRestrictedListener('getProcessList', this.getProcessList, 'System.getProcessList');
 		PermissionsManager.addRestrictedListener('notification', this.notification, 'Notification.notification');
-		PermissionsManager.addRestrictedListener('setTrayIcon', this.setTrayIcon, 'Application.setTrayIcon');
-		PermissionsManager.addRestrictedListener('getTrayIconInfo', this.getTrayIconInfo, 'Application.getTrayIconInfo');
-		PermissionsManager.addRestrictedListener('removeTrayIcon', this.removeTrayIcon, 'Application.removeTrayIcon');
-		PermissionsManager.addRestrictedListener('getRuntimeInfo', this.getRuntimeInfo, 'System.getRuntimeInfo');
+		PermissionsManager.addRestrictedListener('setTray', this.setTray, 'WindowProcess.setTray');
+		PermissionsManager.addRestrictedListener('getTrayInfo', this.getTrayInfo, 'WindowProcess.getTrayInfo');
+		PermissionsManager.addRestrictedListener('removeTray', this.removeTray, 'WindowProcess.removeTray');
+		PermissionsManager.addRestrictedListener('getEnvironmentVariable', this.getEnvironmentVariable, 'System.getEnvironmentVariable');
 		MainBus.addListener('checkPermission', this.checkPermission); // This listener can not be disabled as other permission checking is dependent on it.
 	}
 
 	/**
-	 * Handle application quit here
+	 * Handle application exit here
 	 */
-	quit() {
-		this.closeExternalApps();
+	exit() {
+		// this.closeExternalApps();
+
 		logger.log('APPLICATION LIFECYCLE: Quitting application');
-		this.app.quit();
+
+		// app.exit (as opposed to app.quit) causes Electron to immediately terminate without any "quitting" events
+		this.app.exit();
 	}
 
 	/**
 	 * Clears the cache
-	 *
-	 * Example usage: https://github.com/ChartIQ/finsemble/blob/2b8e0895136f6c5c53cc89d71a582bf4eb74a799/src/clients/windowClient.ts#L809
 	 *
 	 * @param {BusEvent} eventObj
 	 */
@@ -132,7 +152,7 @@ class MainSystem extends EventEmitter {
 		const storages = truthyKeys.map(key => key.toLowerCase());
 
 		// This id is arbitrary. It goes back to the dalal and sharp era.
-		const currentWindow = await ApplicationManager.findWindowById(2);
+		const currentWindow = await MainWindowProcessManager.findWindowById(2);
 
 		if (!currentWindow) {
 			logger.warn('clearCache failed because currentWindow is not found.');
@@ -140,7 +160,7 @@ class MainSystem extends EventEmitter {
 		}
 
 		// https://github.com/electron/electron/blob/master/docs/api/session.md#sesclearstoragedataoptions-callback
-		currentWindow.win.webContents.session.clearStorageData({ storages });
+		await currentWindow.win.webContents.session.clearStorageData({ storages });
 		logger.info('Electron Cache cleared.');
 		if (options.preload) {
 			clearPreloadCache();
@@ -156,38 +176,28 @@ class MainSystem extends EventEmitter {
 	}
 
 	/**
-	 * Open a url in the default browser
-	 * @param {BusEvent} eventObj
+	 * Can be used once by the application to indicate startup successfully completed. This function clears the handshake timer.
 	 */
-	openUrlWithBrowser(eventObj) {
-		function validURl(s) {
-			const regexp = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/;
-			return regexp.test(s.toLowerCase());
+	startupApplicationHandshake() {
+		if (this.startupApplicationHandshakeTimer) {
+			clearTimeout(this.startupApplicationHandshakeTimer);
+			this.startupApplicationHandshakeTimer = null;
 		}
-
-		if (validURl(eventObj.data)) {
-			shell.openExternal(eventObj.data);
-		} else {
-			logger.warn(`Failed to open browser - invalid url provided" ${eventObj.data}`);
-		}
-
-		eventObj.respond();
 	}
 
 	/**
 	 * Get the current system specs
 	 * @param {BusEvent} eventObj
 	 */
-	getHostSpecs(eventObj) {
+	getSystemInfo(eventObj) {
 		si.graphics((graphicsInfo) => {
 			eventObj.respond({
-				aeroGlassEnabled: false,
 				arch: os.arch(),
 				cpus: os.cpus(),
 				gpu: graphicsInfo,
 				memory: os.totalmem(),
-				name: os.type(),
-				screenSaver: false,
+				osType: os.type(),
+				osVersion: os.release(),
 			});
 		});
 	}
@@ -197,10 +207,12 @@ class MainSystem extends EventEmitter {
  	 * @param {BusEvent} eventObj
  	 */
 	getMonitorInfo(eventObj) {
-		this.MonitorInfo.getMonitorInfo((monitorInfo) => {
-			const response = { monitorInfo };
-			eventObj.respond(response);
-		});
+		const allDisplays = electron.screen.getAllDisplays();
+		const primaryDisplay = electron.screen.getPrimaryDisplay();
+
+		const response = { allDisplays, primaryDisplay};
+
+		eventObj.respond(response);
 	}
 
 	/**
@@ -209,7 +221,7 @@ class MainSystem extends EventEmitter {
  	 */
 	async flushStorage(eventObj) {
 		// This id is arbitrary. It goes back to the dalal and sharp era.
-		const currentWindow = await ApplicationManager.findWindowById(2);
+		const currentWindow = await MainWindowProcessManager.findWindowById(2);
 
 		if (!currentWindow) {
 			logger.warn('flushStorage failed.');
@@ -220,7 +232,7 @@ class MainSystem extends EventEmitter {
 	}
 
 	/**
- 	 * Get the current mouse position. We add left/top since OpenFin gives that
+ 	 * Get the current mouse position.
  	 * @param {BusEvent} eventObj
  	 */
 	getMousePosition(eventObj) {
@@ -231,57 +243,27 @@ class MainSystem extends EventEmitter {
 	}
 
 	/**
-     * This will launch an external(non electron) application
-     * @param {EventObj} eventObj
-     */
-	async launchExternalProcess(eventObj) {
-		const arg = eventObj.data;
-		// @todo make a helper that safely strignifies objects....lodash?
-		logger.debug('MainSystem->launchExternalProcess');
-		// Whether to remove path in these calls is config driven. By default we don't allow users to specify a path. An app must have a manifest for it to work.
-		// If a firm wants to allow paths in calls to launchExternalProcess, we allow them.
-		let removePathInSpawnExternalApps = this.app.manifest.removePathInSpawnExternalApps;
-
-		if (typeof (removePathInSpawnExternalApps) === 'undefined') removePathInSpawnExternalApps = true;
-
-		// On the render side, anyone who tries to invoke launchExternalProcess with a path parameter should be met with a swift error.
-		// If we try to invoke this method from within the main process somehow, verify that it's not using invalid parameters.
-		if (removePathInSpawnExternalApps && arg && arg.data && arg.data.path) {
-			const err = {
-				status: 'error',
-				code: 'unsupported_argument',
-				message: "For security reasons, spawning by path is disallowed by default. If you would like to allow spawning by path, open your application's manifest and set 'removePathInSpawnExternalApps' to true. This is a top-level property on the manifest. If you have separate manifests, make sure to change the property in each file."
-			};
-			logger.warn(err.message);
-			return eventObj.respond(err);
-		}
-
-		// Attempt to launch external process, catch any errors and respond
-		const spawnFileParams = arg.data;
-		try {
-			await this.app.externalApplicationManager.spawnFile(spawnFileParams);
-		} catch (err) {
-			logger.error(`Failed to launch external process ${err.message}`);
-			return eventObj.respond({
-				status: 'error',
-				message: err.message,
-				code: 'launch_fail',
-				error: err
-			});
-		}
-		eventObj.respond({ status: 'success' });
+	 * Restart the application and apply the updates.
+	 * @param {*} quitAndRestart The function from (auto updater)[https://github.com/electron/electron/blob/54ef9068327d7ac34af06ec133b4cb4ea7edbc8f/lib/browser/api/auto-updater/auto-updater-win.js]
+	 * to restart the app and install the update after it has been downloaded.
+	 */
+	restartAndInstallUpdate(quitAndRestart) {
+		logger.log('APPLICATION LIFECYCLE: Restarting the application to apply the new updates.');
+		this.restarting = true;
+		MainWindowProcessManager.closeAllApplications();
+		// this.closeExternalApps();
+		quitAndRestart();
 	}
 
 	/**
  	 * Restart application
 	* // @todo This needs to be updated. There was an issue with parent applications so that is why it is not on the application level. It should be though.
  	 */
-	restartApplication() {
+	restartWindowProcess() {
 		logger.log('APPLICATION LIFECYCLE: Restarting the application');
 		this.restarting = true;
-		// ApplicationManager.restartApplication(arg.uuid, this.app);
-		ApplicationManager.closeAllApplications();
-		this.closeExternalApps();
+		MainWindowProcessManager.closeAllApplications();
+		// this.closeExternalApps();
 		// From the Electron docs: https://electronjs.org/docs/api/app#apprelaunchoptions
 		// Relaunches the app when current instance exits. Relaunch will do nothing if the app never exits, so relaunch must be called, then exit which will force the releaunch.
 		this.app.relaunch();
@@ -294,31 +276,35 @@ class MainSystem extends EventEmitter {
  	 * @param {BusEvent} eventObj
  	 */
 	async getProcessList(eventObj) {
-		if (!ApplicationManager.pollingStarted) {
-			await ApplicationManager.startPollingResources();
+		if (!MainWindowProcessManager.pollingStarted) {
+			await MainWindowProcessManager.startPollingResources();
 		}
 		if (this.pollingTimeout) {
 			clearTimeout(this.pollingTimeout);
 		}
-		this.pollingTimeout = setTimeout(ApplicationManager.stopPollingResources.bind(this), 2000);
-		const applications = Object.values(ApplicationManager.applications);
+		this.pollingTimeout = setTimeout(MainWindowProcessManager.stopPollingResources.bind(this), 2000);
+		const applications = Object.values(MainWindowProcessManager.allWindowProcesses);
 		const rawProcessList = applications.map(app => app.getHeuristics());
 		const processList = rawProcessList.filter(p => Boolean(p));
 		eventObj.respond(processList);
 	}
 
-	// TODO: Openfin allows a tray icon per application. However, for notifications here we are using the tray icon so need at least one global tray icon.
+	// TODO: For notifications here we are using the tray icon so need at least one global tray icon.
 	// Fix this so that the first one is global and we also have a list of icons by application.
-	// Also, we do not need to adhere to openfin's tray icon limitations. Need discussion on what our solution should be.
 	// Maybe this will not be an issue if we have working regular notifications and do not need to rely on the tray.
 	/**
 	 *
 	 * @param {BusEvent} eventObj
 	 */
 	notification(eventObj) {
+		// Support sending a string or an object in the message field
+		if(eventObj.data.message) {
+			if (eventObj.data.message.title) eventObj.data.title = eventObj.data.message.title;
+			if (eventObj.data.message.description) eventObj.data.message = eventObj.data.message.description;
+		}
 		const notificationSettings = {
-			title: eventObj.data.title || 'Finsemble',
-			message: eventObj.data.message || eventObj.data.body || eventObj.data.content || 'Finsemble',
+			title: eventObj.data.title || 'Secure Electron Adapter',
+			message: eventObj.data.message || eventObj.data.body || eventObj.data.content || 'Secure Electron Adapter',
 			// wait: false,
 			icon: eventObj.data.icon || this.notificationIcon,
 		};
@@ -332,16 +318,15 @@ class MainSystem extends EventEmitter {
 		});
 	}
 
-	// TODO: Openfin allows a tray icon per application. However, for notifications here we are using the tray icon so need at least one global tray icon.
+	// TODO: For notifications here we are using the tray icon so need at least one global tray icon.
 	// Fix this so that the first one is global and we also have a list of icons by application.
-	// Also, we do not need to adhere to openfin's tray icon limitations. Need discussion on what our solution should be.
 	// Maybe this will not be an issue if we have working regular notifications and do not need to rely on the tray.
 	/**
  	 *
  	 * @param {BusEvent} eventObj
  	 */
-	async setTrayIcon(eventObj) {
-		const currentFolderLocation = path.join(appData, 'e2o', 'icons');
+	async setTray(eventObj) {
+		const currentFolderLocation = path.join(appData, 'sea', 'icons');
 		if (!fs.existsSync(currentFolderLocation)) {
 			logger.debug('Creating icon folder', currentFolderLocation);
 			mkdirp.sync(currentFolderLocation);
@@ -356,18 +341,18 @@ class MainSystem extends EventEmitter {
 
 		let iconImage = nativeImage.createFromPath(filePath); // TODO: icon is blank even though the file exists
 		iconImage = iconImage.resize({ width: 16, height: 16 }); // this was supposed to be the solution to a blank icon but it doesnt work.
-		const trayIcon = new Tray(iconImage);
+		const tray = new Tray(iconImage);
 		if (!this.tray) {
-			this.tray = trayIcon;
+			this.tray = tray;
 			this.notificationIcon = filePath;
 		}
 
-		this.trayIconByApplication[eventObj.data.uuid] = trayIcon;
+		this.trayByWindowProcess[eventObj.data.uuid] = tray;
 
 		// @todo make this look nicer.
 		if (eventObj.data.listeners) {
 			if (eventObj.data.listeners.includes('clickListener')) {
-				trayIcon.addListener('click', (event, position) => {
+				tray.addListener('click', (event, position) => {
 					logger.verbose('User left-clicked the system tray icon');
 					position.event = 'click';
 					position.left = position.x;
@@ -377,7 +362,7 @@ class MainSystem extends EventEmitter {
 					eventObj.respond(position);
 				});
 
-				trayIcon.addListener('right-click', (event, position) => {
+				tray.addListener('right-click', (event, position) => {
 					logger.verbose('User right-clicked the system tray icon');
 					position.event = 'click';
 					position.left = position.x;
@@ -391,7 +376,7 @@ class MainSystem extends EventEmitter {
 			// looks like this is mac only
 			// @todo figure out what this does when we support OSX.
 			if (eventObj.data.listeners.includes('hoverListener')) {
-				trayIcon.addListener('mouse-enter', (event, position) => {
+				tray.addListener('mouse-enter', (event, position) => {
 					eventObj.respond(position);
 				});
 			}
@@ -402,10 +387,10 @@ class MainSystem extends EventEmitter {
  	 *
  	 * @param {BusEvent} eventObj
  	 */
-	getTrayIconInfo(eventObj) {
-		const trayIcon = this.trayIconByApplication[eventObj.data.uuid];
-		if (trayIcon) {
-			const iconBounds = trayIcon.getBounds();
+	getTrayInfo(eventObj) {
+		const tray = this.trayByWindowProcess[eventObj.data.uuid];
+		if (tray) {
+			const iconBounds = tray.getBounds();
 			iconBounds.left = iconBounds.x;
 			iconBounds.top = iconBounds.y;
 			logger.verbose('Sending tray icon info', iconBounds);
@@ -417,22 +402,41 @@ class MainSystem extends EventEmitter {
  	 *
  	 * @param {BusEvent} eventObj
  	 */
-	removeTrayIcon(eventObj) {
-		const trayIcon = this.trayIconByApplication[eventObj.data.uuid];
-		if (trayIcon) {
-			if (trayIcon === this.tray) this.tray = null;
-			trayIcon.destroy();
-			delete this.trayIconByApplication[eventObj.data.uuid];
+	removeTray(eventObj) {
+		const tray = this.trayByWindowProcess[eventObj.data.uuid];
+		if (tray) {
+			if (tray === this.tray) this.tray = null;
+			tray.destroy();
+			delete this.trayByWindowProcess[eventObj.data.uuid];
 			logger.info('Tray icon deleted.');
 		}
 	}
 
 	/**
-	 * Responds with a fake Runtime Object
-	 * @param {BusEvent} eventObj
+	 * Responds to getEnvironmentVariable request from the render process
+	 * @param {*} eventObj -- needs to have a "data.variableName" property, which is either a string or an array of strings
 	 */
-	getRuntimeInfo(eventObj) {
-		eventObj.respond({ port: 1234 });
+	getEnvironmentVariable(eventObj) {
+		const variableName = eventObj.data.variableName;
+		const argumentIsValid = typeof (variableName) == "string" || Array.isArray(variableName);
+		const environmentVariablesExist = Boolean(process.env);
+
+		if (argumentIsValid && environmentVariablesExist) {
+			let value;
+			if (Array.isArray(variableName)) {
+				value = {};
+				variableName.forEach(name => value[name] = process.env[name] || null);
+			} else {
+				value = process.env[variableName] || null;
+			}
+			eventObj.respond({ status: "success", value });
+		}
+		// it is not an error if any given variable does not exists, but it is an error if:
+		// 1. we cannot access environment variables
+		// 2. eventObj.data.variableName is not a string or an array
+		else {
+			eventObj.respond({ status: "error", message: "Error processing environment variable message" });
+		}
 	}
 
 	/**
@@ -441,14 +445,8 @@ class MainSystem extends EventEmitter {
 	 * @param {string} permission
 	 */
 	async checkPermission(eventObj) {
-		const mainWin = await ApplicationManager.findWindowByName(eventObj.sender.browserWindowOptions.name);
+		const mainWin = await MainWindowProcessManager.findWindowByName(eventObj.sender.browserWindowOptions.name);
 		eventObj.respond(PermissionsManager.checkPermission(mainWin, eventObj.data));
-	}
-	/**
-	 * Invokes ExternalApplicationManager#closeAllApps
-	 */
-	closeExternalApps() {
-		this.app.externalApplicationManager.closeAllApps();
 	}
 }
 module.exports = MainSystem;

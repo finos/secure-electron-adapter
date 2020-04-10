@@ -33,10 +33,14 @@ describe('Main.js', () => {
 	let event;
 	// Fake manifest
 	let manifest;
+	// sample application URL to use in tests
+	const sampleURL = "http://localhost:3375/index.html";
 	// Reassign values before each case
 	beforeEach(() => {
 		sandbox = sinon.createSandbox();
 		Main = require('../main/Main');
+		checkURLDownloadable = require('../common/checkURLDownloadable.js');
+		helpers = require('../common/helpers');
 		app = new EventEmitter();
 		app.setAppUserModelId = sandbox.spy();
 		contents = new WebContents();
@@ -47,8 +51,12 @@ describe('Main.js', () => {
 			preventDefault: sinon.spy()
 		};
 		manifest = {
-			startup_app: {},
-			finsemble: {
+			main: {
+				"name": "SEA Local",
+				"url": "http://www.google.com",
+				"uuid": "TEST"
+			},
+			electronAdapter: {
 				permissions: {}
 			}
 		};
@@ -65,41 +73,109 @@ describe('Main.js', () => {
 	it('Require Main.js returns an instance', () => {
 		expect(Main).to.be.an('object');
 	});
-	it('_addWebContentsCreatedHandler is called', () => {
+	it('confirm valid manifest validates okay', async () => {
+		expect(helpers.checkManifestHasRequiredProperties(manifest)).equals(null);
+	});
+	it('confirm null manifest error is generated', async () => {
+		expect(helpers.checkManifestHasRequiredProperties(null)).includes("No manifest");
+	});
+	it('confirm missing main manifest error is generated', async () => {
+		let manifest = {
+		};
+		expect(helpers.checkManifestHasRequiredProperties(manifest)).includes("main is not");
+	});
+	it('confirm missing main.name manifest error is generated', async () => {
+		let manifest = {
+			main: {
+				"url": sampleURL,
+				"uuid": "TEST"
+			},
+		};
+		expect(helpers.checkManifestHasRequiredProperties(manifest)).includes("main.name is not");
+	});
+	it('confirm missing main.url manifest error is generated', async () => {
+		let manifest = {
+			main: {
+				"name": "ChartIQ Local",
+				"uuid": "TEST"
+			},
+		};
+		expect(helpers.checkManifestHasRequiredProperties(manifest)).includes("main.url is not");
+	});
+	it('confirm missing main.uuid manifest error is generated', async () => {
+		let manifest = {
+			main: {
+				"name": "ChartIQ Local",
+				"url": sampleURL,
+			},
+		};
+		expect(helpers.checkManifestHasRequiredProperties(manifest)).includes("main.uuid is not");
+	});
+	it('confirm illegal URL', async () => {
+		let response = "no error";
+		await checkURLDownloadable("http:://www.google.com/Test404.html", 3000).catch((err) => {
+			response = err;
+		});
+		expect(response).includes("illegally formatted");
+	});
+	it('confirm unknown URL', async () => {
+		let response = "no error";
+		await checkURLDownloadable("http://www.google.com/Test404.html", 3000).catch((err) => {
+			response = err;
+		});
+		expect(response).includes("404");
+	});
+	it('confirm unknown protocol in url', async () => {
+		let response = "no error";
+		await checkURLDownloadable("httpxx://www.google.com", 500).catch((err) => {
+			response = err;
+		});
+		expect(response).includes("Electron.Net error");
+	});
+	// NOTE: The below test using a bad hostname are handled correctly during normal run-time, but cause unexplained failures in Mocha when running regression tests
+	// it('confirm unknown Hostname', async () => {
+	// 	let response = "no error";
+	// 	// NOTE: This try-catch block should not be necessary but put in to try to catch unexplained behavior when testing.
+	// 	await Main.checkURLDownloadable("http://www.googleXXX.com", 300).catch((err) => {
+	// 		response = err;
+	// 	});
+	// 	expect(response).includes("Timeout");
+	// });
+	it('_addWebContentsCreatedHandler is called', async () => {
 		const spy = sandbox.spy(Main, '_addWebContentsCreatedHandler');
-		Main.init(app, manifest);
+		await Main.init(app, manifest);
 		sinon.assert.calledOnce(spy);
 	});
-	it('_onWebContentsCreated is invoked on web-contents-created', () => {
+	it('_onWebContentsCreated is invoked on web-contents-created', async () => {
 		const spy = sandbox.spy(Main, '_onWebContentsCreated');
-		Main.init(app, manifest);
+		await Main.init(app, manifest);
 		Main.app.emit('web-contents-created', event, contents);
 		sinon.assert.calledOnce(spy);
 	});
-	it('_onWebContentsCreated is invoked with proper arguments', () => {
+	it('_onWebContentsCreated is invoked with proper arguments', async () => {
 		const spy = sandbox.spy(Main, '_onWebContentsCreated');
-		Main.init(app, manifest);
+		await Main.init(app, manifest);
 		Main.app.emit('web-contents-created', event, contents);
 		sinon.assert.calledWith(spy, event, contents);
 	});
-	it('_onNewWindowHandler is invoked with arguments / modifies preferences', () => {
+	it('_onNewWindowHandler is invoked with arguments / modifies preferences', async () => {
 		const options = {
 			webPreferences
 		};
 		const spy = sandbox.spy(Main, '_onNewWindowHandler');
-		Main.init(app, manifest);
+		await Main.init(app, manifest);
 		Main.app.emit('web-contents-created', event, contents);
 		contents.emit('new-window', event, 'http://example.com', 'FakeWindow', null, options);
 		sinon.assert.calledWith(spy, event, 'http://example.com', 'FakeWindow', null, options);
 	});
-	it('_onWillAttachWebViewHandler is invoked with proper arguments, modifies preferences', () => {
+	it('_onWillAttachWebViewHandler is invoked with proper arguments, modifies preferences', async () => {
 		// We expect _onWillAttachWebViewHandler to delete all keys from webPreferences
 		// and set nodeIntegration property to false
 		const modifiedWebPreferences = {
 			nodeIntegration: false
 		};
 		const spy = sandbox.spy(Main, '_onWillAttachWebViewHandler');
-		Main.init(app, manifest);
+		await Main.init(app, manifest);
 		Main.app.emit('web-contents-created', event, contents);
 		contents.emit('will-attach-webview', event, webPreferences);
 		sinon.assert.calledWith(spy, event, webPreferences);

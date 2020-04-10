@@ -75,7 +75,7 @@ module.exports = {
 		partition: undefined,
 		// Number - The default zoom factor of the page, `3.0` represents `300%`. Default is `1.0`.
 		zoomFactor: 1.0,
-		// Boolean - Disable zoom at the application level. Individual windows are still able to zoom in/out by injecting zoom.js preload. This is feature is introduced due to a chromiun [bug](https://github.com/electron/electron/issues/8793)
+		// Boolean - Disable zoom at the windowProcess level. Individual windows are still able to zoom in/out by injecting zoom.js preload. This is feature is introduced due to a chromiun [bug](https://github.com/electron/electron/issues/8793)
 		disableZoom: true,
 		// Boolean - Enables JavaScript support. Default is `true`.
 		javascript: true,
@@ -113,92 +113,26 @@ module.exports = {
 		pageVisibility: false,
 	},
 	permissions: {
-		Application: {
+		WindowProcess: {
 			close: true,
-			createApplication: true,
-			getChildWindows: true,
+			createWindowProcess: true,
+			getWindows: true,
 			getManifest: true,
 			getOptions: true,
-			getTrayIconInfo: true,
+			getTrayInfo: true,
 			remoteApplicationEvents: true,
-			removeTrayIcon: true,
-			restartApplication: true,
-			setTrayIcon: true,
+			removeTray: true,
+			restartWindowProcess: true,
+			setTray: true,
 			spawn: true,
 			syncAppInfo: true,
 			addListener: {
-				closed: true,
-				connected: true,
-				crashed: true,
-				initialized: true,
-				'manifest-changed': true,
-				'not-responding': true,
-				'out-of-memory': true,
-				responding: true,
-				'run-requested': true,
-				started: true,
-				'tray-icon-clicked': true,
-				'window-alert-requested': true,
-				'window-auth-requested': true,
-				'window-blurred': true,
-				'window-bounds-changed': true,
-				'window-bounds-changing': true,
-				'window-closed': true,
-				'window-closing': true,
-				'window-crashed': true,
-				'window-created': true,
-				'window-disabled-frame-bounds-changed': true,
-				'window-disabled-frame-bounds-changing': true,
-				'window-embedded': true,
-				'window-end-load': true,
-				'window-external-process-exited': true,
-				'window-external-process-started': true,
-				'window-file-download-completed': true,
-				'window-file-download-progress': true,
-				'window-file-download-started': true,
-				'window-focused': true,
-				'window-frame-disabled': true,
-				'window-frame-enabled': true,
-				'window-group-changed': true,
-				'window-hidden': true,
-				'window-initialized': true,
-				'window-maximized': true,
-				'window-minimized': true,
-				'window-navigation-rejected': true,
-				'window-not-responding': true,
-				'window-out-of-memory': true,
-				'window-preload-scripts-state-changed': true,
-				'window-preload-scripts-state-changing': true,
-				'window-reloaded': true,
-				'window-responding': true,
-				'window-restored': true,
-				'window-show-requested': true,
-				'window-shown': true,
-				'window-start-load': true
+				closed: true
 			},
-			// createFromManifest: true, // unimplemented
-			// getZoomLevel: true, // unimplemented
-			// getGroups: true, // unimplemented
-			// getInfo: true, // unimplemented
-			// getParentUuid: true, // unimplemented
-			// getShortcuts: true, // unimplemented
-			// isRunning: true, // unimplemented
-			// registerUser: true, // unimplemented
-			// run: true, // unimplemented
-			// scheduleRestart: true, // unimplemented
-			// setShortcuts: true, // unimplemented
-			// setZoomLevel: true, // unimplemented
-			// terminate: true, // unimplemented
 		},
-		InterApplicationBus: {
+		MessageBus: {
 			publish: true,
-			subscribe: true,
-			// addSubscribeListener: true, // unimplemented
-			// addUnsubscribeListener: true, // unimplemented
-			// removeSubscribeListener: true, // unimplemented
-			// removeUnsubscribeListener: true, // unimplemented
-			// send: true, // unimplemented
-			// unsubscribe: true // implemented, but not sent
+			subscribe: true
 		},
 		Notification: {
 			notification: true,
@@ -207,216 +141,53 @@ module.exports = {
 			clearCache: true,
 			exit: true,
 			flushStorage: true,
-			getAllApplications: true,
+			getAllWindowProcesses: true,
 			getAllWindows: true,
-			getHostSpecs: true,
+			getEnvironmentVariable: true,
+			getSystemInfo: true,
 			getMonitorInfo: true,
 			getMousePosition: true,
 			getProcessList: true,
-			getRuntimeInfo: true,
 			getVersion: true,
-			launchExternalProcess: true,
-			readRegistryValue: true, // unimplemented, but in a security policy
-			openUrlWithBrowser: true,
 			showDeveloperTools: true,
 			addListener: {
-				'application-closed': true,
-				'application-connected': true,
-				'application-crashed': true,
-				'application-created': true,
-				'application-initialized': true,
-				'application-manifest-changed': true,
-				'application-not-responding': true,
-				'application-responding': true,
-				'application-run-requested': true,
-				'application-started': true,
-				'application-tray-icon-clicked': true,
-				'desktop-icon-clicked': true,
-				'idle-state-changed': true,
-				'monitor-info-changed': true,
 				'session-changed': true,
-				'window-blurred': true,
-				'window-bounds-changed': true,
-				'window-bounds-changing': true,
-				'window-closed': true,
-				'window-closing': true,
-				'window-crashed': true,
-				'window-created': true,
-				'window-disabled-frame-bounds-changed': true,
-				'window-disabled-frame-bounds-changing': true,
-				'window-embedded': true,
-				'window-end-load': true,
-				'window-external-process-exited': true,
-				'window-external-process-started': true,
-				'window-file-download-completed': true,
-				'window-file-download-progress': true,
-				'window-file-download-started': true,
-				'window-focused': true,
-				'window-frame-disabled': true,
-				'window-frame-enabled': true,
-				'window-group-changed': true,
-				'window-hidden': true,
-				'window-initialized': true,
-				'window-maximized': true,
-				'window-minimized': true,
-				'window-navigation-rejected': true,
-				'window-not-responding': true,
-				'window-preload-scripts-state-changed': true,
-				'window-preload-scripts-state-changing': true,
-				'window-reloaded': true,
-				'window-responding': true,
-				'window-restored': true,
-				'window-shown': true,
-				'window-start-load': true
+				'monitor-info-changed': true
 			}
-			// deleteCache: true, // unimplemented
-			// downloadAsset: true, // unimplemented
-			// downloadPreloadScripts: true, // unimplemented
-			// downloadRuntime: true, // unimplemented
-			// flushCookie: true, // unimplemented
-			// getAllExternalApplication: true, // unimplemented
-			// getAppAssetInfo: true, // unimplemented
-			// getCommandLineArguments: true, // unimplemented
-			// getCookies: true, // unimplemented
-			// getCrashReporterState: true, // unimplemented
-			// getDeviceUserId: true, // unimplemented
-			// getEntityInfo: true, // unimplemented
-			// getEnvironmentVariable: true, // unimplemented
-			// getFocusedWindow: true, // unimplemented
-			// getLogList: true, // unimplemented
-			// getMachineId: true, // unimplemented
-			// getMinLogLevel: true, // unimplemented
-			// getProxySettings: true, // unimplemented
-			// log: true, // unimplemented
-			// monitorExternalProcess: true, // unimplemented
-			// registerExternalConnection: true, // unimplemented
-			// releaseExternalProcess: true, // unimplemented
-			// setMinLogLevel: true, // unimplemented
-			// startCrashReporter: true, // unimplemented
-			// terminateExternalProcess: true, // unimplemented
-			// updateProxySettings: true, // unimplemented
 		},
 		Window: {
-			animate: true,
-			authenticate: true,
 			blur: true,
 			bringToFront: true,
 			close: true,
 			closeRequestedAdd: true,
 			closeRequestedRemove: true,
 			createWindowWithAffinity: true,
-			disableFrame: true,
-			enableFrame: true,
 			executeJavaScript: true,
-			flash: true,
 			focus: true,
-			getAllFrames: true,
 			getBounds: true,
+			getBoundsFromSystem: true,
 			getDetails: true,
-			getGroup: true,
-			getInfo: true,
-			getNativeWindow: true,
 			getOptions: true,
 			getParentApplication: true,
-			getParentWindow: true,
 			getState: true,
-			getZoomLevel: true,
 			hide: true,
 			isShowing: true,
-			joinGroup: true,
-			leaveGroup: true,
 			maximize: true,
 			minimize: true,
-			moveBy: true,
-			moveTo: true,
-			navigate: true,
-			navigateBack: true,
-			navigateForward: true,
 			reload: true,
 			removeListener: true,
-			resizeBy: true,
-			resizeTo: true,
 			restore: true,
-			setAsForegroundColor: true,
 			setBounds: true,
 			setZoomLevel: true,
 			syncWindowInfo: true,
 			show: true,
 			showAt: true,
 			showDeveloperTools: true,
-			stopFlashing: true,
-			stopNavigation: true,
 			updateOptions: true,
 			addListener: {
-				'auth-requested': true,
-				'begin-user-bounds-changing': true,
-				blurred: true,
 				'bounds-changed': true,
-				'bounds-change-end': true,
 				'close-requested': true,
-				closed: true,
-				closing: true,
-				crashed: true,
-				'disabled-frame-bounds-changed': true,
-				'disabled-frame-bounds-changing': true,
-				embedded: true,
-				'end-user-bounds-changing': true,
-				'external-process-exited': true,
-				'external-process-started': true,
-				'file-download-completed': true,
-				'file-download-progress': true,
-				'file-download-started': true,
-				focused: true,
-				'frame-disabled': true,
-				'frame-enabled': true,
-				'group-changed': true,
-				hidden: true,
-				initialized: true,
-				maximized: true,
-				minimized: true,
-				'navigation-rejected': true,
-				'preload-scripts-state-changed': true,
-				'preload-scripts-state-changing': true,
-				reloaded: true,
-				'resource-load-failed': true,
-				'resource-response-received': true,
-				restored: true,
-				'show-requested': true,
-				shown: true,
-				/* Electron events, these are not emitted by openfin
-				'always-on-top-changed': true,
-				'app-command': true,
-				blur: true,
-				close, true,
-				closed: true, //also an openfin event
-				'enter-full-screen': true,
-				'enter-html-full-screen': true,
-				focus: true,
-				hide: true,
-				'leave-full-screen': true,
-				'leave-html-full-screen': true,
-				maximize: true,
-				minimize: true,
-				move: true,
-				moved: true,
-				'new-window-for-tab': true,
-				'page-title-updated': true,
-				'ready-to-show': true,
-				responsive: true,
-				restore: true,
-				resize: true,
-				'scroll-touch-begin': true,
-				'scroll-touch-edge': true,
-				'scroll-touch-end': true,
-				'session-end': true,
-				'sheet-begin': true,
-				'sheet-end': true,
-				show: true,
-				swipe: true,
-				unmaximize: true,
-				unresponsive: true,
-				'will-move': true,
-				'will-resizeBy': true */
+				closed: true
 			},
 			chromePermissions,
 			webPreferences: {

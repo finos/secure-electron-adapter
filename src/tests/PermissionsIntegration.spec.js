@@ -14,12 +14,12 @@ describe('Permissions Integration tests', () => {
 	context('Window permission method tests', () => {
 		// setup create window with all permissions true
 		// create window with all permissions false
-		const windowMethods = ['animate', 'authenticate', 'blur', 'bringToFront', 'close', 'closeRequestedAdd', 'closeRequestedRemove',
-			'createWindowWithAffinity', 'disableFrame', 'enableFrame', 'executeJavaScript', 'flash', 'focus', 'forceClose', 'getAllFrames',
-			'getBounds', 'getDetails', 'getGroup', 'getInfo', 'getNativeWindow', 'getOptions', 'getParentApplication', 'getParentWindow',
-			'getState', 'getZoomLevel', 'hide', 'isShowing', 'joinGroup', 'leaveGroup', 'maximize', 'minimize', 'moveBy', 'moveTo',
-			'navigate', 'navigateBack', 'navigateForward', 'reload', 'removeListener', 'resizeBy', 'resizeTo', 'restore', 'setAsForegroundColor',
-			'setBounds', 'setZoomLevel', 'syncWindowInfo', 'show', 'showAt', 'showDeveloperTools', 'stopFlashing', 'stopNavigation', 'updateOptions'];
+		const windowMethods = ['blur', 'bringToFront', 'close', 'closeRequestedAdd', 'closeRequestedRemove',
+			'createWindowWithAffinity', 'executeJavaScript', 'focus', 'forceClose',
+			'getBounds', 'getDetails', 'getOptions', 'getParentApplication',
+			'getState', 'hide', 'isShowing', 'maximize', 'minimize',
+			'reload', 'removeListener', 'restore',
+			'setBounds', 'setZoomLevel', 'syncWindowInfo', 'show', 'showAt', 'showDeveloperTools', 'updateOptions'];
 		// add listeners with PermissionsManager.addRestrictedListener
 		// send request to listener
 		// verify access denied is returned
@@ -42,7 +42,7 @@ describe('Permissions Integration tests', () => {
 			it(`should return a listener that does not contain an error when permission for ${value} is true`);
 		});
 	});
-	context('Application permission method tests', () => {
+	context('WindowProcess permission method tests', () => {
 		const applicationMethods = [];
 		applicationMethods.forEach((value) => {
 			it(`should return accessDenied when permission for ${value} is false`);
@@ -52,7 +52,7 @@ describe('Permissions Integration tests', () => {
 			it(`should return a listener that does not contain an error when permission for ${value} is true`);
 		});
 	});
-	context('Application permission addListener tests', () => {
+	context('WindowProcess permission addListener tests', () => {
 		const applicationListeners = [];
 		applicationListeners.forEach((value) => {
 			it(`should return accessDenied when permission for ${value} is false`);

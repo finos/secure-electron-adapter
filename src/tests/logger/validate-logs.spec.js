@@ -5,12 +5,11 @@ const winston = require('winston');
 const { ipcMain } = require('electron-ipc-mock')();
 const LoggerMain = require('../../logger/classes/LoggerMain');
 const config = require('../../logger/config');
-const appData = require('../../main/helpers/getAppDataFolderSync')();
+const appData = require('../../main/helpers/getAppDataFolderSync').folderPath;
 
 describe('Validate logs', () => {
 	const logsDirectory = path.join(
 		appData,
-		'Electron',
 		'logs'
 	);
 	const winstonLogger = winston.createLogger(config);
@@ -18,7 +17,7 @@ describe('Validate logs', () => {
 	const date = new Date();
 	const month = `0${date.getMonth() + 1}`.slice(-2);
 	const day = `0${date.getDate()}`.slice(-2);
-	const expectedFileName = `FEA-${date.getFullYear()}-${month}-${day}.log`;
+	const expectedFileName = `SEA-${date.getFullYear()}-${month}-${day}.log`;
 	// Generate few logs
 	loggerMain.verbose('test verbose');
 	loggerMain.debug('test debug');

@@ -1,4 +1,4 @@
-const { ipcMain } = require('electron');
+const { ipcMain, WebContents, BrowserWindow } = require('electron');
 const EventEmitter = require('events').EventEmitter;
 const { accessDenied } = require('../common/helpers');
 const PermissionsManager = require('../permissions/PermissionsManager');
@@ -31,21 +31,28 @@ class MainBus extends EventEmitter {
 			}
 		});
 	}
+
 	/**
 	 * @param {ElectronEvent} event event from the renderer process
-	 * @param {FinsembleEvent} finsembleEvent used to create a BusEvent
+	 * @param {windowProcessEvent} windowProcessEvent used to create a BusEvent
 	 * @param {UUID} responseUUID channel to send response
 	 *
 	 * @return undefined
 	 */
-	handleMainRequest(event, finsembleEvent, responseUUID) {
-		if (!finsembleEvent.topic) {
-			this.sendMessage(event.sender, { error: 'No topic provided' }, responseUUID);
+	handleMainRequest(event, windowProcessEvent, responseUUID) {
+		try {
+			if (!windowProcessEvent.topic) {
+				this.sendMessage(event.sender, { error: 'No topic provided' }, responseUUID);
+			}
+	
+			const busEvent = this.buildRequestObject(event, windowProcessEvent, responseUUID);
+	
+			this.emit(windowProcessEvent.topic, busEvent);
+		} catch(ex) {
+			logger.error(ex)
+			event.returnValue = { error: ex.message }
+			this.sendMessage(event.sender, { error: ex.message }, responseUUID);
 		}
-
-		const busEvent = this.buildRequestObject(event, finsembleEvent, responseUUID);
-
-		this.emit(finsembleEvent.topic, busEvent);
 	}
 
 	/**
@@ -89,12 +96,12 @@ class MainBus extends EventEmitter {
 	}
 
 	/**
-	 * sets up three channels 'e2o.mainRequest', 'system.addlistener', and 'system.removelistener'
-	 * all api communications occur on 'e2o.mainRequest' from the renderer processes.
-	 * MainBus emits the sub topic System, Application, window, etc.
+	 * sets up three channels 'sea.mainRequest', 'system.addlistener', and 'system.removelistener'
+	 * all api communications occur on 'sea.mainRequest' from the renderer processes.
+	 * MainBus emits the sub topic System, WindowProcess, window, etc.
 	 */
 	setupMainListener() {
-		ipcMain.on('e2o.mainRequest', this.handleMainRequest.bind(this));
+		ipcMain.on('sea.mainRequest', this.handleMainRequest.bind(this));
 		ipcMain.on('system.addlistener', this.addSystemListener.bind(this));
 		ipcMain.on('system.removelistener', this.removeSystemListener.bind(this));
 	}
@@ -121,7 +128,7 @@ class MainBus extends EventEmitter {
 	 * build a BusEvent to be emitted by MainBus
 	 *
 	 * @param {Electron Event} event - The electron event
-	 * @param {FinsembleEvent} args - Information we need to handle the request
+	 * @param {windowProcessEvent} args - Information we need to handle the request
 	 * @param {UUID} responseUUID - This tells us what channel to respond on
 	 *
 	 * @return {BusEvent}
@@ -133,6 +140,7 @@ class MainBus extends EventEmitter {
 			rawArgs: args,
 			topic: args.topic,
 			data: args.data,
+			getBrowserWindow: () => BrowserWindow.fromWebContents(event.sender),
 			respondSync: (response) => {
 				event.returnValue = response;
 			},
@@ -154,8 +162,8 @@ class MainBus extends EventEmitter {
 	 */
 	async onIPCSubscribe(event, arg) {
 		// Only allow subscribing if permitted
-		const mainWin = await process.applicationManager.findWindowByName(event.sender.browserWindowOptions.name);
-		const permission = 'InterApplicationBus.subscribe';
+		const mainWin = await process.mainWindowProcessManager.findWindowByName(event.sender.browserWindowOptions.name);
+		const permission = 'MessageBus.subscribe';
 		if (!PermissionsManager.checkPermission(mainWin, permission)) {
 			try {
 				event.sender.send('subscribeResponseError', accessDenied(permission));
@@ -179,8 +187,8 @@ class MainBus extends EventEmitter {
 	 */
 	async onIPCUnsubscribe(event, arg) {
 		// Only allow unsubscribing if permitted
-		const mainWin = await process.applicationManager.findWindowByName(event.sender.browserWindowOptions.name);
-		const permission = 'InterApplicationBus.unsubscribe';
+		const mainWin = await process.mainWindowProcessManager.findWindowByName(event.sender.browserWindowOptions.name);
+		const permission = 'MessageBus.unsubscribe';
 		if (!PermissionsManager.checkPermission(mainWin, permission)) {
 			try {
 				event.sender.send('unSubscribeResponseError', accessDenied(permission));
@@ -196,45 +204,45 @@ class MainBus extends EventEmitter {
 	}
 
 	/**
-	 * This doesnt work anymore. Windows have moved locations
-	 * TODO is this still broken?
+	 * Recieves a publish to a specific topic from on of the render processes and sends subscribeResponse to each of the topic subscribers (in their own window/redender process)
 	 *
 	 * @param {ElectronEvent} event
 	 * @param {Object} arg
 	 */
 	async onIPCPublish(event, arg) {
-		// Only allow publishing if permitted
-		const mainWin = await process.applicationManager.findWindowByName(event.sender.browserWindowOptions.name);
-		const permission = 'InterApplicationBus.publish';
+		const mainWin = await process.mainWindowProcessManager.findWindowByName(event.sender.browserWindowOptions.name);
+		const permission = 'MessageBus.publish';
+
+		// return error if publishing not permitted within permissions
 		if (!PermissionsManager.checkPermission(mainWin, permission)) {
 			try {
 				event.sender.send('publishResponseError', accessDenied(permission));
 			} catch (error) {
-				logger.error('Error sending publishResponseError', error);
+				logger.error('Error sending permission-failure publishResponseError', error);
+			}
+		} else {
+			const subscribers = this.subscribers[arg.topic] || {};
+
+			// MM Note: I was concerned there might be a race condition where getOwnerBrowserWindow could fail because sender immediately closed after publish (it depends in part on Electron implementation).
+			// However testing I didn't see this so appears to be fine. If this ever happened though could put the sender's appUUID in the publish so getOwnerBrowserWindow wouldn't need to be called here.
+			const senderBrowserWindow = event.sender.getOwnerBrowserWindow();
+
+			for (const subscriberKey in subscribers) {
+				const subscriber = subscribers[subscriberKey];
+				if (subscriber.senderUUID === '*' || subscriber.senderUUID == senderBrowserWindow.appUUID) {
+					try {
+						subscriber.sender.send('subscribeResponse', {
+							senderId: event.sender.id,
+							data: arg.data,
+							subscribeUUID: subscriber.subscribeUUID,
+							uuid: senderBrowserWindow.appUUID,
+						});
+					} catch (error) {
+						logger.error('Error sending subscribeResponse', error);
+					}
+				}
 			}
 		}
-		const subscribers = this.subscribers[arg.topic];
-		if (!subscribers) return;
-		const windows = global.windows;
-		const senderWindow = windows[event.sender.id];
-
-		const subscriberKeys = Object.keys(subscribers);
-		subscriberKeys.map((subKey) => {
-			const subscriber = subscribers[subKey];
-			if (subscriber.senderUUID === '*' || subscriber.senderUUID == senderWindow.appUUID) {
-				try {
-					subscriber.sender.send('subscribeResponse', {
-						senderId: event.sender.id,
-						data: arg.data,
-						subscribeUUID: subscriber.subscribeUUID,
-						uuid: senderWindow.appUUID,
-					});
-				} catch (error) {
-					logger.error('Error sending subscribeResponse', error);
-				}
-
-			}
-		});
 	}
 
 	/**
@@ -242,9 +250,9 @@ class MainBus extends EventEmitter {
 	 * @return undefined
 	 */
 	setupIPC() {
-		ipcMain.on('e2o.subscribe', this.onIPCSubscribe.bind(this));
-		ipcMain.on('e2o.unSubscribe', this.onIPCUnsubscribe.bind(this));
-		ipcMain.on('e2o.publish', this.onIPCPublish.bind(this));
+		ipcMain.on('sea.subscribe', this.onIPCSubscribe.bind(this));
+		ipcMain.on('sea.unSubscribe', this.onIPCUnsubscribe.bind(this));
+		ipcMain.on('sea.publish', this.onIPCPublish.bind(this));
 	}
 }
 

@@ -1,3 +1,3 @@
 # ignore files with global returns
 src/render/Window.js
-src/e2o.js
+src/sea.js

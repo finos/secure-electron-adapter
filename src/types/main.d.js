@@ -30,7 +30,7 @@
  * @property {Object} mainWindowOptions.customData
  * @property {String[]} preload list of preloads to load into render process
  * @property {boolean} frame hides the window frame if true
- * @property {boolean} autoShow if false, the window will default to hidden
+ * @property {boolean} visible if false, the window will default to hidden
  * @property {boolean} showTaskbarIcon if true the window will receive a taskbar icon
  * @property {Number} defaultWidth default width of the window
  * @property {Number} defaultHeight default height of the window
@@ -39,34 +39,19 @@
  */
 
 /**
-* MainApplication represents a main process application in e2o
+* MainWindowProcess represents a main process application in sea
 *
-* @typedef {Object} MainApplication
+* @typedef {Object} MainWindowProcess
 * @property {MainWindow[]} windows List of windows for this application
 * @property {MainWindow} appWindow the window for the application itself
-* @property {MainApplicationParams} details the parameters used to create the application
+* @property {MainWindowProcessParams} details the parameters used to create the application
 * @property {String} state current application state
 */
 
 /**
- * MainApplicationParams represents params for a main application
+ * MainWindowProcessParams represents params for a main application
  *
- * @typedef {MainWindowParams} MainApplicationParams
+ * @typedef {MainWindowParams} MainWindowProcessParams
  *
  */
 
-/**
- * ExternalApplication
- *
- * @typedef {Object} ExternalApplication
- * @property {ChildProcess} appReference https://nodejs.org/api/child_process.html#child_process_child_process_spawn_command_args_options
- */
-
-/**
- * ExternalApplicationParams
- *
- * @typedef {Object} ExternalApplicationParams
- * @property {String} path location of external application executable
- * @property {Object} arguments arguments to use when launching external application
- * @property {ChildProcessOptions} options https://nodejs.org/api/child_process.html#child_process_child_process_spawn_command_args_options
- */

@@ -1,5 +1,6 @@
 const transports = require('../transports');
-
+const terminalTransport = require('../transports/winston-terminal-transport');
+const { levels } = require('../config');
 const LOGGER_ON_MESSAGE = 'logger:message';
 
 class LoggerMain {
@@ -24,18 +25,30 @@ class LoggerMain {
 	}
 
 	/**
+	 * Enables the console transport
+	 */
+	enableConsole() {
+		this.winston.add(terminalTransport);
+	}
+
+	/**
 	 * Sets the minimum log level on all transports
 	 * @param {string} level The minimum logging level
 	 */
 	setLevel(level = 'debug') {
-		if (!this[level]) {
-			this.warn(`Bad logging level ${level} passed to setLevel`);
+		// The level "log" conflicts with Winston's log method.
+		const logLevel = (level === 'log') ? 'log-' : level;
+		if (logLevel !== 'log-'  && !this[logLevel]) {
+			const validOpts = Object.keys(levels)
+				.join('", "')
+				.replace('-', '')
+			this.warn(`Bad logging level "${logLevel}" passed to setLevel. Valid options are: "${validOpts}".`);
 			return;
 		}
 		transports.forEach((transport) => {
-			transport.level = level;
+			transport.level = logLevel;
 		});
-		this.debug(`Changed logging level to ${level}`);
+		this.debug(`Changed logging level to ${logLevel}`);
 	}
 
 	/**

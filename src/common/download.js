@@ -20,6 +20,9 @@ const download = (url, options) => new Promise((resolve, reject) => {
 			data.push(chunk);
 		});
 
+		// TO DO: response.on('error') will not catch http errors, so should also reject if statusCode >= 400.
+		// However, checking statusCode doesn't cover all the cases either (e.g. internet down) so should also set a timer to handle no response.
+		// Similar code with these extra checks is in checkURLDownloadable in main.js.
 		response.on('error', (error) => {
 			reject(error);
 		});
