@@ -132,7 +132,7 @@ class MessageBus extends EventEmitter {
 			// message on the specified topic
 			this.subscribers[subscribeUUID] = subscribeObject;
 
-			// @todo probably don't need to check for callback since it has a default. Leaving for now. Brad - 2/13/19
+			// @todo probably don't need to check for callback since it has a default. Leaving for now.
 			// Return a success callback "We subscribed successfully".
 			if (callback) callback();
 		} catch (err) {
