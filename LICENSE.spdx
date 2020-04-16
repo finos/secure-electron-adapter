@@ -1,7 +1,7 @@
 SPDXVersion: SPDX-2.0
 DataLicense: CC0-1.0
 Creator: ChartIQ
-PackageName: {project name}
+PackageName: secure-electron-adapter
 PackageOriginator: ChartIQ
-PackageHomePage: https://github.com/{program name}/{project name}
+PackageHomePage: https://github.com/{program name}/secure-electron-adapter
 PackageLicenseDeclared: Apache-2.0
