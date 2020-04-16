@@ -1,0 +1,7 @@
+SPDXVersion: SPDX-2.0
+DataLicense: CC0-1.0
+Creator: ChartIQ
+PackageName: {project name}
+PackageOriginator: ChartIQ
+PackageHomePage: https://github.com/{program name}/{project name}
+PackageLicenseDeclared: Apache-2.0
