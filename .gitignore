@@ -17,12 +17,7 @@ crash_service.exe
 debug.log
 SnoreToast.lnk
 -
-src/externalApp/CppWindowsHook/bin/
-src/externalApp/CppHookDll/Debug
-src/externalApp/CppWindowsHook/Debug
-src/externalApp/CppWindowsHook/.vs/
-src/externalApp/Debug
-src/externalApp/.vs
+website/i18n/
 persistence
 logs/
 deploy/configs/**.json

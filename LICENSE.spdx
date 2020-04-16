@@ -3,5 +3,5 @@ DataLicense: CC0-1.0
 Creator: ChartIQ
 PackageName: secure-electron-adapter
 PackageOriginator: ChartIQ
-PackageHomePage: https://github.com/{program name}/secure-electron-adapter
+PackageHomePage: https://github.com/finos/secure-electron-adapter
 PackageLicenseDeclared: Apache-2.0
