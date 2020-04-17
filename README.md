@@ -13,7 +13,7 @@ npm install secure-electron-adapter --save
 
 ## Usage example
 
-See the sea-quick-start for example usage.
+See [sea-quick-start](https://github.com/finos/sea-quick-start) for example usage.
 
 ### To debug:
 
