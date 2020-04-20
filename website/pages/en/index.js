@@ -146,8 +146,8 @@ class Index extends React.Component {
 
       return (
         <div className="userShowcase productShowcaseSection paddingTop paddingBottom">
-          <h2>Who is Using Project Blueprint?</h2>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur ac pulvinar velit. Curabitur maximus dui in libero vehicula fringilla. Nam eu fringilla turpis. Pellentesque id. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent iaculis.</p>
+          <h2>Who is Using Secure Electron Adapter?</h2>
+          <p>ChartIQ developed the Secure Electron Adapter to make developing applications on top of Electron easy and secure</p>
           <Showcase users={pinnedUsers} />
           {/* exclude button to users page for now, all users shown on main page */}
           {/* <div className="more-users">
