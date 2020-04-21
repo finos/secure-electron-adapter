@@ -102,6 +102,48 @@ class Index extends React.Component {
       </div>
     );
 
+    const Description = () => (
+      <div>
+        <h2>Quick Start Guide</h2>
+        <p>
+          Please see the <a href="https://github.com/finos/sea-quick-start">sea-quick-start</a> repository on GitHub for example usage.
+        </p>
+        <h2>Business Problem</h2>
+        <p>
+          The Secure Electron Adapter (SEA) targets the need for a completely open source means of developing secure, 
+          enterprise-class desktop applications. This technology is the means to host Web technology based (HTML5) applications 
+          directly on a computer desktop (versus within a consumer Web browser like Chrome or Edge). Specifically, this 
+          contribution offers a means to use Electron in a secured manner, making its use appropriate for the financial 
+          institution. 
+        </p>
+        <h2>Solution</h2>
+        <p>
+          SEA provides a secure alternative to working directly with the Electron API. It acts as a firewall, 
+          intermediating API calls within a permission structure that obviates the risk of running third party 
+          content in a desktop agent.
+        </p>
+        <p>It is pure open source, requiring no commercial software, relying exclusively on Electron.</p>
+        <p>
+          The contribution has been assessed by a third party to be secure and of appropriate architecture to address security 
+          considerations generally. In addition to our own work designing a secured Electron, we have implemented 
+          or provided vetted, alternative approaches to all recommendations for security provided by the Electron community.
+        </p>
+        <p>
+          Architecturally, SEA is a JavaScript adapter, giving access to Electron window-manipulation and OS capabilities, 
+          via a disintermediation of the actual Electron APIs for security reasons. Access to the Node main process is 
+          restricted and security profiles have been provided and configured according to recommended practice. 
+          The framework provides an inter-application communication facility hosted from within the Electron main process.
+        </p>
+        <h2>Current State</h2>
+        <p>
+          SEA is currently a part of ChartIQ's commercial Finsemble offering. It was developed in 2018 and early 2019 as part of 
+          Finsemble's migration to run more purely on standard Electron capability. This is a production offering and the basis 
+          of current Finsemble client installations. It is our actively maintained product capability and we intend to continue
+          evolving and maintaining it as such. It is currently not completely isolated in a form we can contribute. 
+        </p>
+      </div>
+    );
+
     const Features = () => (
       <Block background="white" layout="fourColumn">
         {[
@@ -163,8 +205,9 @@ class Index extends React.Component {
       <div>
         <HomeSplash siteConfig={siteConfig} language={language} />
         <div className="mainContainer">
-          <Features />
-          <FeatureCallout />
+          {/* <Features /> */}
+          <Description />
+          {/* <FeatureCallout /> */}
           <UserShowcase />
         </div>
       </div>
