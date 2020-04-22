@@ -142,7 +142,7 @@ class Index extends React.Component {
           SEA is currently a part of ChartIQ's commercial Finsemble offering. It was developed in 2018 and early 2019 as part of 
           Finsemble's migration to run more purely on standard Electron capability. This is a production offering and the basis 
           of current Finsemble client installations. It is our actively maintained product capability and we intend to continue
-          evolving and maintaining it as such. It is currently not completely isolated in a form we can contribute. 
+          evolving and maintaining it as such.
         </p>
       </div>
     );
