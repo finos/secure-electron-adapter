@@ -63,4 +63,5 @@ jobs:
     - name: Run Mocha tests
       run: |
         npm install
+        npm i -g electron-mocha
         electron-mocha src/**/*.spec.js --timeout 5000
