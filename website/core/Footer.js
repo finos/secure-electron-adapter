@@ -40,36 +40,9 @@ class Footer extends React.Component {
           </a>
           <div>
             <h5>Docs</h5>
-            <a href={this.docUrl('')}>
-              Getting Started
-            </a>
-            <a href={this.docUrl('')}>
-              Why Project Blueprint
-            </a>
-            <a href={this.docUrl('')}>
-              Use Cases
-            </a>
           </div>
           <div>
-            <h5>Community</h5>
-            <a
-              href="https://www.finos.org/"
-              target="_blank"
-              rel="noreferrer noopener">
-              FINOS
-            </a>
-            <a
-              href="https://www.finos.org/"
-              target="_blank"
-              rel="noreferrer noopener">
-              Project Blueprint Wiki
-            </a>
-            <a
-              href="https://www.finos.org/"
-              target="_blank"
-              rel="noreferrer noopener">
-              Google Groups
-            </a>            
+            <h5>Community</h5>       
             {/* <a href={this.pageUrl('users.html', this.props.language)}>
               User Showcase
             </a>
