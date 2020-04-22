@@ -15,7 +15,7 @@ const siteConfig = {
   tagline: 'Secure Electron Adapter',
   cname: 'sea.finos.org',
   url: 'https://finos.github.io/secure-electron-adapter',
-  baseUrl: '/secure-electron-adapter/',
+  baseUrl: '/',
   projectName: 'secure-electron-adapter',
   repoUrl: 'https://github.com/finos/secure-electron-adapter',
   organizationName: 'FINOS',
