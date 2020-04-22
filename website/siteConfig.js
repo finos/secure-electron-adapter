@@ -23,9 +23,9 @@ const siteConfig = {
   // Header menu
   // We suggest that Docs, Roadmap, Team and GitHub items are available
   headerLinks: [
-    {doc: '', label: 'Docs'},
-    {doc: '', label: 'Roadmap'},
-    {doc: '', label: 'Team'},
+//     {doc: '', label: 'Docs'},
+//     {doc: '', label: 'Roadmap'},
+//     {doc: '', label: 'Team'},
     {href: 'https://github.com/finos/secure-electron-adapter', label: 'GitHub'},
     {blog: false}
   ],
