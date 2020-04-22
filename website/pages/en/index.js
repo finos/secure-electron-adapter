@@ -122,11 +122,14 @@ class Index extends React.Component {
           intermediating API calls within a permission structure that obviates the risk of running third party 
           content in a desktop agent.
         </p>
-        <p>It is pure open source, requiring no commercial software, relying exclusively on Electron.</p>
         <p>
-          The contribution has been assessed by a third party to be secure and of appropriate architecture to address security 
-          considerations generally. In addition to our own work designing a secured Electron, we have implemented 
-          or provided vetted, alternative approaches to all recommendations for security provided by the Electron community.
+          It is open source, requiring no commercial software, relying exclusively on Electron and other NPM 
+          dependencies.  Please see the `validate-license` npm script for an audit of the licenses used among dependencies.
+        </p>
+        <p>
+          The SEA project adheres to all of <a href="https://www.electronjs.org/docs/tutorial/security">Electron's security
+          recommendations</a> by default and allows a developer to easily use common functionality that would otherwise 
+          require writing custom IPC messages in order to adhere to these recommendations.
         </p>
         <p>
           Architecturally, SEA is a JavaScript adapter, giving access to Electron window-manipulation and OS capabilities, 
