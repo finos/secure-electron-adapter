@@ -13,6 +13,7 @@ const siteConfig = {
   // Change the following items replacing 'project-blueprint' with your repository name
   title: 'Secure Electron Adapter', // Title for your website.
   tagline: 'Secure Electron Adapter',
+  cname: 'sea.finos.org',
   url: 'https://finos.github.io/secure-electron-adapter',
   baseUrl: '/secure-electron-adapter/',
   projectName: 'secure-electron-adapter',
