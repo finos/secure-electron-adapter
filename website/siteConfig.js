@@ -11,12 +11,12 @@ const users = require('./data/users.json');
 const siteConfig = {
   // GitHub repository coordinates
   // Change the following items replacing 'project-blueprint' with your repository name
-  title: 'FINOS Project Blueprint', // Title for your website.
-  tagline: 'FINOS Project Blueprint',
-  url: 'https://finos.github.io/project-blueprint',
-  baseUrl: '/project-blueprint/',
-  projectName: 'project-blueprint',
-  repoUrl: 'https://github.com/finos/project-blueprint',
+  title: 'Secure Electron Adapter', // Title for your website.
+  tagline: 'Secure Electron Adapter',
+  url: 'https://finos.github.io/secure-electron-adapter',
+  baseUrl: '/secure-electron-adapter/',
+  projectName: 'secure-electron-adapter',
+  repoUrl: 'https://github.com/finos/secure-electron-adapter',
   organizationName: 'FINOS',
 
   // Header menu
@@ -25,7 +25,7 @@ const siteConfig = {
     {doc: '', label: 'Docs'},
     {doc: '', label: 'Roadmap'},
     {doc: '', label: 'Team'},
-    {href: 'https://github.com/finos/project-blueprint', label: 'GitHub'},
+    {href: 'https://github.com/finos/secure-electron-adapter', label: 'GitHub'},
     {blog: false}
   ],
   users,

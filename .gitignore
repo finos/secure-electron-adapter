@@ -18,6 +18,7 @@ debug.log
 SnoreToast.lnk
 -
 website/i18n/
+build/
 persistence
 logs/
 deploy/configs/**.json
