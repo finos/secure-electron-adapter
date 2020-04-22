@@ -9,7 +9,7 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Install Node
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v1
     - name: Install deps
       run: npm install
 
@@ -31,7 +31,7 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Install Node
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v1
     - name: Run lint
       run: npm run lint
 
@@ -42,7 +42,7 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Install Node
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v1
     - name: Run Gulp
       run: set NODE_ENV=development&& gulp buildSEA
 
@@ -53,6 +53,6 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v1
     - name: Install Node
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v1
     - name: Run Mocha tests
       run: electron-mocha src/**/*.spec.js --timeout 5000
