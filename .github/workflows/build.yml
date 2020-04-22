@@ -1,0 +1,58 @@
+name: build-sea
+
+on: [push, pull_request]
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v1
+    - name: Install Node
+      uses: actions/setup-node@v2
+    - name: Install deps
+      run: npm install
+
+  validate-license:
+    runs-on: ubuntu-latest
+    need: install
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v1
+    - name: Install Node
+      uses: actions/setup-node@v2
+    - name: Validate license
+      run: npm run validate-license
+
+  lint:
+    runs-on: ubuntu-latest
+    need: install
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v1
+    - name: Install Node
+      uses: actions/setup-node@v2
+    - name: Run lint
+      run: npm run lint
+
+  pack:
+    runs-on: ubuntu-latest
+    need: install
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v1
+    - name: Install Node
+      uses: actions/setup-node@v2
+    - name: Run Gulp
+      run: set NODE_ENV=development&& gulp buildSEA
+
+  test:
+    runs-on: ubuntu-latest
+    need: install
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v1
+    - name: Install Node
+      uses: actions/setup-node@v2
+    - name: Run Mocha tests
+      run: electron-mocha src/**/*.spec.js --timeout 5000
