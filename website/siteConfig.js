@@ -42,7 +42,7 @@ const siteConfig = {
   },
 
   // Change the copyright info with correct program/project names */
-  copyright: `Copyright © ${new Date().getFullYear()} Project Blueprint - FINOS`,
+  copyright: `Copyright © ${new Date().getFullYear()} Secure Electron Adapter - FINOS`,
 
   highlight: {
     theme: 'default',
