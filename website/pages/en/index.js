@@ -96,14 +96,14 @@ class Index extends React.Component {
     );
 
     const FeatureCallout = () => (
-      <div  className="featureShowcaseSection  paddingBottom" style={{textAlign: 'center'}}>
+      <div className="featureShowcaseSection  paddingBottom" style={{textAlign: 'center'}}>
         <h2>Use Cases</h2>
         <MarkdownBlock>{`Document business [use cases](${docUrl('use-cases/overview')}) that drives the Project Blueprint.`}</MarkdownBlock>
       </div>
     );
 
     const Description = () => (
-      <div>
+      <div className="wrapper">
         <h2>Quick Start Guide</h2>
         <p>
           Please see the <a href="https://github.com/finos/sea-quick-start">sea-quick-start</a> repository on GitHub for example usage.
