@@ -30,7 +30,9 @@ const onLoad = function (cb = Function.prototype) {
 
 // Store promise to ensure all preloads have executed before calling onLoad
 let preloadPromise = new Promise((resolve, reject) => {
+	console.log('preloadPromise')
 	ipcRenderer.once("runPreloads-complete",(event, arg) => {
+		console.log('runPreloads-complete')
 		resolve();
 	  })
 })
@@ -73,8 +75,8 @@ if (currentWindow) {
 			onLoad,
 			getCurrentWindow: () => Window.getCurrent(),
 			getCurrentWindowProcess: () => WindowProcess.getCurrent(),
-			Window,
-			WindowProcess,
+			launchWindow: (params, cb) => {return new Window(params, cb)},
+			launchWindowProcess: (params, cb) => {return new Window(params, cb)},
 			System: new System(),
 		}
 	)
