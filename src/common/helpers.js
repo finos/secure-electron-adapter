@@ -49,6 +49,19 @@ const getFolderLocation = async (folder) => {
 	return path.join(appData, 'sea', folder);
 };
 
+/**
+ * Function that returns an accessDenied error callback or string including the passed in method name
+ * @param {object} methodName
+ * @param {*} cb
+ */
+const accessDenied = (methodName, cb = null) => {
+	const errorText = `api_access_denied: Access to API method ${methodName} denied.`;
+	if (cb && typeof cb === 'function') {
+		return cb({ error: 'api_access_denied', message: errorText });
+	}
+	return errorText;
+};
+
 
 /**
  * Check if passed in value is a boolean
@@ -151,6 +164,7 @@ module.exports = {
 	deleteFolderRecursive,
 	clearPreloadCache,
 	getFolderLocation,
+	accessDenied,
 	isBoolean,
 	getCookies,
 	getCookieHeader,

@@ -73,8 +73,8 @@ if (currentWindow) {
 			onLoad,
 			getCurrentWindow: () => Window.getCurrent(),
 			getCurrentWindowProcess: () => WindowProcess.getCurrent(),
-			Window,
-			WindowProcess,
+			launchWindow: (params, cb) => {return new Window(params, cb)},
+			launchWindowProcess: (params, cb) => {return new WindowProcess(params, cb)},
 			System: new System(),
 		}
 	)
