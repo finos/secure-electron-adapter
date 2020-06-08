@@ -127,6 +127,10 @@ body {
   padding: 40 0;
 }
 
+.mainContainer .center {
+  text-align: center;
+}
+
 .blockImage img{
   fill: #ffffff;
 }

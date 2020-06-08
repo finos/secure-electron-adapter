@@ -1,5 +1,7 @@
 [![FINOS - Incubating](https://cdn.jsdelivr.net/gh/finos/contrib-toolbox@master/images/badge-incubating.svg)](https://finosfoundation.atlassian.net/wiki/display/FINOS/Incubating)
 
+[![SEA Logo](https://sea.finos.org/img/sea-horizontal-logo.svg)](https://sea.finos.org)
+
 # Secure Electron Adapter
 
 ChartIQ's Secure Electron Adapter provides an easy way to create an Electron application that adheres to Electron's own security recommendations by design.

@@ -104,6 +104,9 @@ class Index extends React.Component {
 
     const Description = () => (
       <div className="wrapper">
+        <div className="center">
+          <img src={`img/sea-horizontal-logo.svg`} width={500} alt="Secure Electron Adapter" title="Secure Electron Adapter"/>
+        </div>
         <h2>Quick Start Guide</h2>
         <p>
           Please see the <a href="https://github.com/finos/sea-quick-start">sea-quick-start</a> repository on GitHub for example usage.
