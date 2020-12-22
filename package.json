@@ -30,7 +30,7 @@
     "electron": "8.1.1",
     "electron-process-manager": "1.0.0",
     "electron-rebuild": "1.10.1",
-    "node-notifier": "6.0.0",
+    "node-notifier": "8.0.1",
     "superagent": "4.1.0",
     "systeminformation": "3.45.10"
   },
