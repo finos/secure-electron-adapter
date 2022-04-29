@@ -35,7 +35,7 @@
     "systeminformation": "3.45.10"
   },
   "devDependencies": {
-    "async": "2.6.1",
+    "async": "2.6.4",
     "case-sensitive-paths-webpack-plugin": "2.2.0",
     "chai": "4.2.0",
     "death": "1.1.0",
